@@ -1,0 +1,24 @@
+{# NetworkError / ConnectionError fix – adds skip-if-offline guard #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 13 }} @@
+ {{ ' ' }}{{ original_code or '# (original network-dependent code)' }}
++# SelfHeal: skip test when network is unavailable
++import pytest
++import socket
++
++
++def _is_online(host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0) -> bool:
++    """Return True if a basic TCP connection can be established."""
++    try:
++        socket.create_connection((host, port), timeout=timeout)
++        return True
++    except OSError:
++        return False
++
++
++@pytest.mark.skipif(not _is_online(), reason="Network unavailable – skipping {{ error_func or 'test' }}")
++def {{ error_func or 'test_network' }}():
++    {{ original_code.strip() if original_code else '# (original network-dependent logic)' }}

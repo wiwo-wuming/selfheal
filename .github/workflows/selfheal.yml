@@ -1,0 +1,70 @@
+name: SelfHeal - Auto Test Repair
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1-5'  # Every weekday at 6 AM
+  workflow_dispatch:        # Manual trigger
+
+jobs:
+  selfheal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run SelfHeal
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # Run pytest and capture failures, then self-heal
+          python -m selfheal.core.watchers.pytest_watcher 2>&1 | tee pytest-output.txt || true
+          # Start watch mode (single run)
+          selfheal watch --auto-apply
+
+      - name: Generate Metrics Report
+        if: always()
+        run: |
+          selfheal metrics --json > selfheal-metrics.json
+
+      - name: Upload Metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfheal-metrics
+          path: selfheal-metrics.json
+
+      - name: Create Issue on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const metrics = JSON.parse(fs.readFileSync('selfheal-metrics.json', 'utf8'));
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 SelfHeal: ${metrics.failure_count} test failures detected`,
+              body: `## SelfHeal Metrics
+              - **Fix Rate**: ${metrics.fix_rate_pct}%
+              - **Pipeline Runs**: ${metrics.pipeline_runs}
+              - **Failed**: ${metrics.failure_count}
+              - **Top Categories**: ${JSON.stringify(metrics.top_categories)}
+              `,
+              labels: ['self-heal', 'automated', 'bug']
+            });

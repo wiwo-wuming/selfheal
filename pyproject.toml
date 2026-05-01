@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "selfheal"
+version = "0.1.0"
+description = "Intelligent Test Self-Healing Framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "SelfHeal Contributors" }
+]
+keywords = ["testing", "self-healing", "automation", "qa"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "pyyaml>=6.0.0",
+    "pydantic>=2.0.0",
+    "jinja2>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+llm = [
+    "openai>=1.0.0",
+    "anthropic>=0.8.0",
+]
+docker = [
+    "docker>=6.0.0",
+]
+github = [
+    "PyGithub>=2.0.0",
+]
+hotreload = [
+    "watchdog>=3.0.0",
+]
+
+[project.scripts]
+selfheal = "selfheal.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/selfheal/selfheal"
+Documentation = "https://selfheal.readthedocs.io"
+Repository = "https://github.com/selfheal/selfheal"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

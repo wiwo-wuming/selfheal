@@ -1,0 +1,10 @@
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ error_line or 1 }},1 +{{ error_line or 1 }},7 @@
+-{{ original_code or ('# Original code at line ' ~ (error_line or '?')) }}
++# SelfHeal auto-fix: {{ category }} error
++# Error: {{ error_message }}
++try:
++    {{ original_code.strip() if original_code else '# (re-run the failing logic here)' }}
++except {{ error_type }} as e:
++    pytest.fail(f"{{ error_type }} in {{ error_func or 'test' }}: {e}")

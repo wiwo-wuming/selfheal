@@ -1,0 +1,222 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.3, pluggy-1.6.0 -- D:\py one\python.exe
+cachedir: .pytest_cache
+rootdir: c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal
+configfile: pytest.ini
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 156 items
+
+tests/test_applier.py::TestPatchApplier::test_apply_replacement PASSED   [  0%]
+tests/test_applier.py::TestPatchApplier::test_backup_created PASSED      [  1%]
+tests/test_applier.py::TestPatchApplier::test_rollback PASSED            [  1%]
+tests/test_applier.py::TestPatchApplier::test_apply_no_target PASSED     [  2%]
+tests/test_applier.py::TestPatchApplier::test_apply_missing_file PASSED  [  3%]
+tests/test_applier.py::TestPatchApplier::test_apply_empty_patch PASSED   [  3%]
+tests/test_applier.py::TestPatchApplier::test_extract_code_from_markdown PASSED [  4%]
+tests/test_applier.py::TestPatchApplier::test_is_unified_diff PASSED     [  5%]
+tests/test_applier.py::TestPatchApplier::test_get_backup_path PASSED     [  5%]
+tests/test_config_advanced.py::TestWatcherConfigMulti::test_single_watcher_legacy_mode PASSED [  6%]
+tests/test_config_advanced.py::TestWatcherConfigMulti::test_multi_watcher_mode PASSED [  7%]
+tests/test_config_advanced.py::TestWatcherConfigMulti::test_disabled_watchers_filtered_out PASSED [  7%]
+tests/test_config_advanced.py::TestWatcherConfigMulti::test_all_disabled_returns_empty PASSED [  8%]
+tests/test_config_advanced.py::TestWatcherConfigMulti::test_default_watcher_config PASSED [  8%]
+tests/test_config_advanced.py::TestReporterConfigMulti::test_single_reporter_legacy_mode PASSED [  9%]
+tests/test_config_advanced.py::TestReporterConfigMulti::test_multi_reporter_mode PASSED [ 10%]
+tests/test_config_advanced.py::TestReporterConfigMulti::test_disabled_reporters_filtered_out PASSED [ 10%]
+tests/test_config_advanced.py::TestReporterConfigMulti::test_all_disabled_returns_empty PASSED [ 11%]
+tests/test_config_advanced.py::TestReporterConfigMulti::test_default_reporter_config PASSED [ 12%]
+tests/test_core.py::TestEvents::test_test_failure_event_creation PASSED  [ 12%]
+tests/test_core.py::TestEvents::test_test_failure_event_to_dict PASSED   [ 13%]
+tests/test_core.py::TestEvents::test_classification_event_creation PASSED [ 14%]
+tests/test_core.py::TestEvents::test_patch_event_creation PASSED         [ 14%]
+tests/test_core.py::TestRuleClassifier::test_classifier_creation PASSED  [ 15%]
+tests/test_core.py::TestRuleClassifier::test_classify_assertion_error PASSED [ 16%]
+tests/test_core.py::TestRuleClassifier::test_classify_import_error PASSED [ 16%]
+tests/test_core.py::TestRuleClassifier::test_classify_timeout_error PASSED [ 17%]
+tests/test_core.py::TestRuleClassifier::test_classify_unknown_error PASSED [ 17%]
+tests/test_core.py::TestConfig::test_default_config PASSED               [ 18%]
+tests/test_core.py::TestConfig::test_watcher_config PASSED               [ 19%]
+tests/test_engine.py::TestSelfHealEngine::test_engine_creation PASSED    [ 19%]
+tests/test_engine.py::TestSelfHealEngine::test_process_failure_flow PASSED [ 20%]
+tests/test_engine.py::TestSelfHealEngine::test_engine_shutdown PASSED    [ 21%]
+tests/test_engine.py::TestEngineIntegration::test_full_pipeline_with_mocked_components PASSED [ 21%]
+tests/test_engine_full.py::TestEngineRetry::test_retry_on_failed_validation PASSED [ 22%]
+tests/test_engine_full.py::TestEngineRetry::test_stop_retry_on_pass PASSED [ 23%]
+tests/test_engine_full.py::TestEngineRetry::test_target_file_resolution PASSED [ 23%]
+tests/test_engine_full.py::TestEngineRetry::test_target_file_resolution_unknown PASSED [ 24%]
+tests/test_engine_full.py::TestEngineRetry::test_process_batch PASSED    [ 25%]
+tests/test_hooks.py::TestMetricsHook::test_before_stage_sets_timer PASSED [ 25%]
+tests/test_hooks.py::TestMetricsHook::test_before_stage_preserves_existing_timers PASSED [ 26%]
+tests/test_hooks.py::TestMetricsHook::test_before_stage_overwrites_same_stage_timer PASSED [ 26%]
+tests/test_hooks.py::TestMetricsHook::test_after_stage_logs_success PASSED [ 27%]
+tests/test_hooks.py::TestMetricsHook::test_after_stage_logs_failure PASSED [ 28%]
+tests/test_hooks.py::TestMetricsHook::test_after_stage_no_timer_does_not_crash PASSED [ 28%]
+tests/test_hooks.py::TestMetricsHook::test_after_stage_writes_to_engine_metrics PASSED [ 29%]
+tests/test_hooks.py::TestCustomHook::test_custom_hook_before_and_after_called PASSED [ 30%]
+tests/test_hooks.py::TestCustomHook::test_custom_hook_with_error PASSED  [ 30%]
+tests/test_hooks.py::TestCustomHook::test_hook_exception_does_not_propagate_by_convention PASSED [ 31%]
+tests/test_metrics.py::TestMetricsCollector::test_initial_state PASSED   [ 32%]
+tests/test_metrics.py::TestMetricsCollector::test_record_failure PASSED  [ 32%]
+tests/test_metrics.py::TestMetricsCollector::test_record_retry PASSED    [ 33%]
+tests/test_metrics.py::TestMetricsCollector::test_record_classification PASSED [ 33%]
+tests/test_metrics.py::TestMetricsCollector::test_fix_rate PASSED        [ 34%]
+tests/test_metrics.py::TestMetricsCollector::test_avg_validation_time PASSED [ 35%]
+tests/test_metrics.py::TestMetricsCollector::test_avg_pipeline_time PASSED [ 35%]
+tests/test_metrics.py::TestMetricsCollector::test_summary PASSED         [ 36%]
+tests/test_metrics.py::TestMetricsCollector::test_format_report PASSED   [ 37%]
+tests/test_metrics.py::TestMetricsCollector::test_reset PASSED           [ 37%]
+tests/test_metrics.py::TestMetricsCollector::test_uptime PASSED          [ 38%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_from_path_registers_components PASSED [ 39%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_from_path_tracks_plugins PASSED [ 39%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_from_path_tracks_modules PASSED [ 40%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_from_nonexistent_path PASSED [ 41%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_empty_directory PASSED [ 41%]
+tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_skips_private_modules FAILED [ 42%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_reload_module_updates_registry FAILED [ 42%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_reload_unknown_module_returns_false PASSED [ 43%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_reload_preserves_component_name PASSED [ 44%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_load_or_reload_file_new PASSED [ 44%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_load_or_reload_file_existing PASSED [ 45%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_load_or_reload_file_skips_non_py PASSED [ 46%]
+tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_load_or_reload_file_skips_private PASSED [ 46%]
+tests/test_plugin_loader.py::TestPluginLoaderInterfaceMap::test_interface_map_has_all_categories PASSED [ 47%]
+tests/test_plugin_loader.py::TestPluginLoaderInterfaceMap::test_interface_map_lazy_populated PASSED [ 48%]
+tests/test_plugin_loader.py::TestPluginLoaderRegistration::test_registry_names_after_load PASSED [ 48%]
+tests/test_plugin_loader.py::TestPluginLoaderRegistration::test_duplicate_name_overwrites PASSED [ 49%]
+tests/test_plugin_loader.py::TestPluginLoaderRegistration::test_load_from_package_discovers_submodules PASSED [ 50%]
+tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_name PASSED  [ 50%]
+tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_initial_load_on_start FAILED [ 51%]
+tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_start_creates_directory PASSED [ 51%]
+tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_stop_stops_thread PASSED [ 52%]
+tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_stop_when_not_running PASSED [ 53%]
+tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_schedule_reload_adds_to_pending PASSED [ 53%]
+tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_schedule_reload_deduplicates PASSED [ 54%]
+tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_schedule_reload_multiple_files PASSED [ 55%]
+tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_process_pending_after_debounce FAILED [ 55%]
+tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_process_pending_nonexistent_file FAILED [ 56%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_snapshot_records_mtimes FAILED [ 57%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_no_change PASSED [ 57%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_modified FAILED [ 58%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_new_file FAILED [ 58%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_deleted_file PASSED [ 59%]
+tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_respects_patterns PASSED [ 60%]
+tests/test_plugin_watcher.py::TestPluginWatcherIntegration::test_load_and_reload_flow PASSED [ 60%]
+tests/test_plugin_watcher.py::TestPluginWatcherIntegration::test_start_stop_lifecycle PASSED [ 61%]
+tests/test_plugin_watcher.py::TestPluginWatcherIntegration::test_watchdog_fallback_to_polling PASSED [ 62%]
+tests/test_plugin_watcher.py::TestPluginWatcherIntegration::test_plugin_watcher_is_registered PASSED [ 62%]
+tests/test_registry.py::TestRegistryGenericAPI::test_register_valid_category PASSED [ 63%]
+tests/test_registry.py::TestRegistryGenericAPI::test_register_invalid_category_raises PASSED [ 64%]
+tests/test_registry.py::TestRegistryGenericAPI::test_get_unknown_category_returns_none PASSED [ 64%]
+tests/test_registry.py::TestRegistryGenericAPI::test_get_unknown_name_returns_none PASSED [ 65%]
+tests/test_registry.py::TestRegistryGenericAPI::test_names_populated PASSED [ 66%]
+tests/test_registry.py::TestRegistryGenericAPI::test_names_empty_category PASSED [ 66%]
+tests/test_registry.py::TestRegistryGenericAPI::test_names_unknown_category PASSED [ 67%]
+tests/test_registry.py::TestRegistryGenericAPI::test_register_overwrites_existing PASSED [ 67%]
+tests/test_registry.py::TestRegistryGenericAPI::test_all_categories_initialised_empty PASSED [ 68%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_watcher PASSED [ 69%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_classifier PASSED [ 69%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_patcher PASSED [ 70%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_validator PASSED [ 71%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_reporter PASSED [ 71%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_store PASSED [ 72%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_register_stage PASSED [ 73%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_convenience_names_properties PASSED [ 73%]
+tests/test_registry.py::TestRegistryConvenienceWrappers::test_all_names_properties_exist PASSED [ 74%]
+tests/test_registry.py::TestGlobalRegistry::test_get_registry_returns_same_instance PASSED [ 75%]
+tests/test_registry.py::TestGlobalRegistry::test_global_registry_is_a_registry PASSED [ 75%]
+tests/test_template_patcher.py::TestParseTraceback::test_extracts_file_and_line PASSED [ 76%]
+tests/test_template_patcher.py::TestParseTraceback::test_extracts_original_code PASSED [ 76%]
+tests/test_template_patcher.py::TestParseTraceback::test_empty_traceback PASSED [ 77%]
+tests/test_template_patcher.py::TestParseTraceback::test_none_traceback_should_be_handled PASSED [ 78%]
+tests/test_template_patcher.py::TestParseTraceback::test_minimal_traceback PASSED [ 78%]
+tests/test_template_patcher.py::TestParseTraceback::test_traceback_without_function_name PASSED [ 79%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_assertion_extracts_expected_actual PASSED [ 80%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_assertion_without_compare PASSED [ 80%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_import_extracts_module_name PASSED [ 81%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_import_extracts_cannot_import_name PASSED [ 82%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_other_error_no_extraction PASSED [ 82%]
+tests/test_template_patcher.py::TestParseErrorMessage::test_empty_error_message PASSED [ 83%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_generates_unified_diff_format PASSED [ 83%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_sets_target_file_from_traceback PASSED [ 84%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_sets_generator_to_template PASSED [ 85%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_patch_id_is_unique PASSED [ 85%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_import_template_sets_target_file PASSED [ 86%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_import_template_includes_importorskip PASSED [ 87%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_fallback_for_unknown_category PASSED [ 87%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_fallback_with_no_traceback_uses_test_path PASSED [ 88%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_all_categories_produce_valid_diff PASSED [ 89%]
+tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_build_template_context_has_all_keys PASSED [ 89%]
+tests/test_validate_stage.py::TestValidateStage::test_name PASSED        [ 90%]
+tests/test_validate_stage.py::TestValidateStage::test_no_patches_empty_list PASSED [ 91%]
+tests/test_validate_stage.py::TestValidateStage::test_no_patches_key_missing PASSED [ 91%]
+tests/test_validate_stage.py::TestValidateStage::test_no_patches_without_classification PASSED [ 92%]
+tests/test_validate_stage.py::TestValidateStage::test_single_patch_passed PASSED [ 92%]
+tests/test_validate_stage.py::TestValidateStage::test_single_patch_failed PASSED [ 93%]
+tests/test_validate_stage.py::TestValidateStage::test_multiple_patches_first_fails_second_passes PASSED [ 94%]
+tests/test_validate_stage.py::TestValidateStage::test_multiple_patches_all_fail PASSED [ 94%]
+tests/test_validate_stage.py::TestValidateStage::test_multiple_patches_stops_on_first_pass PASSED [ 95%]
+tests/test_validate_stage.py::TestValidateStage::test_records_metrics_for_each_validation PASSED [ 96%]
+tests/test_validate_stage.py::TestValidateStage::test_records_metrics_all_fail PASSED [ 96%]
+tests/test_validate_stage.py::TestValidateStage::test_error_validation_result PASSED [ 97%]
+tests/test_validate_stage.py::TestValidateStage::test_does_not_modify_other_context_keys PASSED [ 98%]
+tests/test_validate_stage.py::TestValidateStage::test_patch_without_classification PASSED [ 98%]
+tests/test_validate_stage.py::TestValidateStage::test_large_list_of_patches PASSED [ 99%]
+tests/test_validate_stage.py::TestValidateStage::test_pass_on_first_patch_from_many PASSED [100%]
+
+================================== FAILURES ===================================
+____________ TestPluginLoaderLoad.test_load_skips_private_modules _____________
+tests\test_plugin_loader.py:144: in test_load_skips_private_modules
+    assert "_private" not in modules
+E   AssertionError: assert '_private' not in {'_private': <module '_private' from 'C:\\Users\\longhuihai\\AppData\\Local\\Temp\\tmp0_ylun7f\\_private.py'>, 'multi_plugin': <module 'multi_plugin' from 'C:\\Users\\longhuihai\\AppData\\Local\\Temp\\tmpjb5i6ebh\\multi_plugin.py'>, 'my_reporter': <module 'my_reporter' from 'C:\\Users\\longhuihai\\AppData\\Local\\Temp\\tmpjb5i6ebh\\my_reporter.py'>, 'my_validator': <module 'my_validator' from 'C:\\Users\\longhuihai\\AppData\\Local\\Temp\\tmpjb5i6ebh\\my_validator.py'>}
+________ TestPluginLoaderHotReload.test_reload_module_updates_registry ________
+tests\test_plugin_loader.py:166: in test_reload_module_updates_registry
+    assert success
+E   assert False
+------------------------------ Captured log call ------------------------------
+ERROR    selfheal.plugins.loader:loader.py:120 Failed to reload module my_validator: spec not found for the module 'my_validator'
+_____________ TestPluginWatcherBasics.test_initial_load_on_start ______________
+tests\test_plugin_watcher.py:66: in test_initial_load_on_start
+    mock_load.assert_called_once_with(temp_plugin_dir)
+D:\py one\Lib\unittest\mock.py:997: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\py one\Lib\unittest\mock.py:985: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: load_from_path(WindowsPath('C:/Users/LONGHU~1/AppData/Local/Temp/tmp4amfg0c_'))
+E     Actual: load_from_path(WindowsPath('C:/Users/longhuihai/AppData/Local/Temp/tmp4amfg0c_'))
+________ TestPluginWatcherSchedule.test_process_pending_after_debounce ________
+tests\test_plugin_watcher.py:142: in test_process_pending_after_debounce
+    assert len(watcher._pending) == 0
+E   AssertionError: assert 1 == 0
+E    +  where 1 = len({'C:\\Users\\LONGHU~1\\AppData\\Local\\Temp\\tmpvj33ugc5\\hot_plugin.py': 1777618063.0755897})
+E    +    where {'C:\\Users\\LONGHU~1\\AppData\\Local\\Temp\\tmpvj33ugc5\\hot_plugin.py': 1777618063.0755897} = <selfheal.core.watchers.plugin_watcher.PluginWatcher object at 0x0000012DDB420250>._pending
+_______ TestPluginWatcherSchedule.test_process_pending_nonexistent_file _______
+tests\test_plugin_watcher.py:150: in test_process_pending_nonexistent_file
+    assert len(watcher._pending) == 0
+E   AssertionError: assert 1 == 0
+E    +  where 1 = len({'/tmp/removed_plugin.py': 1777618063.2856438})
+E    +    where {'/tmp/removed_plugin.py': 1777618063.2856438} = <selfheal.core.watchers.plugin_watcher.PluginWatcher object at 0x0000012DDB420C50>._pending
+____________ TestPluginWatcherPolling.test_snapshot_records_mtimes ____________
+tests\test_plugin_watcher.py:163: in test_snapshot_records_mtimes
+    assert hot_plugin in state
+E   AssertionError: assert WindowsPath('C:/Users/LONGHU~1/AppData/Local/Temp/tmpqwx_adb_/hot_plugin.py') in {WindowsPath('C:/Users/longhuihai/AppData/Local/Temp/tmpqwx_adb_/hot_plugin.py'): 1777618063.4939253}
+____________ TestPluginWatcherPolling.test_detect_changes_modified ____________
+tests\test_plugin_watcher.py:183: in test_detect_changes_modified
+    assert hot_plugin in changed
+E   AssertionError: assert WindowsPath('C:/Users/LONGHU~1/AppData/Local/Temp/tmpbrxt1_pz/hot_plugin.py') in [WindowsPath('C:/Users/longhuihai/AppData/Local/Temp/tmpbrxt1_pz/hot_plugin.py')]
+____________ TestPluginWatcherPolling.test_detect_changes_new_file ____________
+tests\test_plugin_watcher.py:195: in test_detect_changes_new_file
+    assert new_file in changed
+E   AssertionError: assert WindowsPath('C:/Users/LONGHU~1/AppData/Local/Temp/tmp11wmmb29/new_hot_plugin.py') in [WindowsPath('C:/Users/longhuihai/AppData/Local/Temp/tmp11wmmb29/new_hot_plugin.py')]
+=========================== short test summary info ===========================
+FAILED tests/test_plugin_loader.py::TestPluginLoaderLoad::test_load_skips_private_modules
+FAILED tests/test_plugin_loader.py::TestPluginLoaderHotReload::test_reload_module_updates_registry
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherBasics::test_initial_load_on_start
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_process_pending_after_debounce
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherSchedule::test_process_pending_nonexistent_file
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_snapshot_records_mtimes
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_modified
+FAILED tests/test_plugin_watcher.py::TestPluginWatcherPolling::test_detect_changes_new_file
+======================== 8 failed, 148 passed in 9.02s ========================
