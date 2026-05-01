@@ -1,5 +1,6 @@
 """Core engine for SelfHeal."""
 
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -258,15 +259,105 @@ class SelfHealEngine:
 
         pipeline_duration = time.time() - pipeline_start
         self.metrics.record_pipeline_run(pipeline_duration)
+
+        # --- post-pipeline rollback for failed validations ---
+        self._maybe_rollback_on_validation_failure(final, context)
+
         return final
 
+    def _maybe_rollback_on_validation_failure(
+        self, final: ValidationEvent, context: dict
+    ) -> None:
+        """Rollback applied patches if validation failed and auto_apply was on.
+
+        This is a safety net: when ``auto_apply=True`` and validation
+        fails, the patch should not remain in the working tree.
+        """
+        if not self.config.engine.auto_apply:
+            return
+
+        if final.result == "passed":
+            return
+
+        patches: list[PatchEvent] = context.get("patches", [])
+        rollback_count = 0
+        for patch in patches:
+            if patch.status == "applied" and patch.backup_path:
+                success = self.applier.rollback(patch)
+                if success:
+                    rollback_count += 1
+                    logger.info(
+                        "Rolled back patch %s (validation %s)",
+                        patch.patch_id, final.result,
+                    )
+                else:
+                    logger.warning(
+                        "Failed to rollback patch %s after validation failure",
+                        patch.patch_id,
+                    )
+
+        if rollback_count > 0:
+            logger.info(
+                "Auto-rollback complete: %d/%d patches rolled back after %s validation",
+                rollback_count, len([p for p in patches if p.status == "applied"]),
+                final.result,
+            )
+
     def process_batch(self, events: list[TestFailureEvent]) -> list[ValidationEvent]:
-        """Process multiple failures in batch."""
+        """Process multiple failures in batch.
+
+        When ``engine.async_batch`` is True and ``max_concurrency > 1``,
+        runs failures concurrently using asyncio.  Otherwise falls back to
+        sequential processing for simplicity and thread-safety.
+        """
+        if (
+            self.config.engine.async_batch
+            and self.config.engine.max_concurrency > 1
+        ):
+            return asyncio.run(
+                self._async_process_batch(events)
+            )
+        return self._process_batch_sequential(events)
+
+    def _process_batch_sequential(
+        self, events: list[TestFailureEvent]
+    ) -> list[ValidationEvent]:
+        """Sequential batch processing (default)."""
         results = []
         for event in events:
             result = self.process_failure(event)
             results.append(result)
         return results
+
+    async def _async_process_failure(
+        self, event: TestFailureEvent
+    ) -> ValidationEvent:
+        """Run process_failure in a thread-pool to avoid blocking the event loop.
+
+        This is a thin async wrapper — the actual pipeline stages are
+        synchronous and run via ``asyncio.to_thread``.
+        """
+        return await asyncio.to_thread(self.process_failure, event)
+
+    async def _async_process_batch(
+        self, events: list[TestFailureEvent],
+    ) -> list[ValidationEvent]:
+        """Process multiple failures concurrently with a bounded semaphore.
+
+        Limits concurrency to ``engine.max_concurrency`` to avoid
+        overwhelming the system (e.g. too many parallel LLM calls or
+        SQLite writes).
+        """
+        max_concurrency = max(1, self.config.engine.max_concurrency)
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def _bounded(event: TestFailureEvent) -> ValidationEvent:
+            async with semaphore:
+                return await self._async_process_failure(event)
+
+        tasks = [_bounded(e) for e in events]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        return list(results)
 
     def _setup_watchers(self) -> None:
         """Build the watcher list from config.

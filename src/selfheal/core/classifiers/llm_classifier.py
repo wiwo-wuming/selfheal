@@ -11,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClassifier(ClassifierInterface):
-    """LLM-based error classifier for intelligent categorization."""
+    """LLM-based error classifier for intelligent categorization.
+
+    Uses an optional response cache (configured via ``cache_enabled`` in
+    ``ClassifierConfig``) to avoid repeated API calls for identical errors.
+    """
 
     def __init__(self, config: ClassifierConfig):
         self.config = config
@@ -19,6 +23,9 @@ class LLMClassifier(ClassifierInterface):
         if config.llm:
             self.llm_config = config.llm
         self._client: Optional[Any] = None
+        # Cache integration
+        self._cache_enabled = getattr(config, "cache_enabled", True)
+        self._cache_ttl = getattr(config, "cache_ttl", 3600.0)
 
     name = "llm"
 
@@ -32,11 +39,11 @@ class LLMClassifier(ClassifierInterface):
 
         provider = self.llm_config.provider.lower()
 
-        if provider == "openai":
+        if provider in ("openai", "deepseek"):
             try:
                 from openai import OpenAI
                 self._client = OpenAI(
-                    api_key=self.llm_config.api_key,
+                    api_key=self.llm_config.get_api_key(),
                     base_url=self.llm_config.base_url,
                 )
             except ImportError:
@@ -44,7 +51,7 @@ class LLMClassifier(ClassifierInterface):
         elif provider == "anthropic":
             try:
                 from anthropic import Anthropic
-                self._client = Anthropic(api_key=self.llm_config.api_key)
+                self._client = Anthropic(api_key=self.llm_config.get_api_key())
             except ImportError:
                 raise ImportError("anthropic package not installed. Run: pip install selfheal[llm]")
         else:
@@ -53,18 +60,50 @@ class LLMClassifier(ClassifierInterface):
         return self._client
 
     def classify(self, event: TestFailureEvent) -> ClassificationEvent:
-        """Classify a test failure using LLM."""
+        """Classify a test failure using LLM, with optional cache."""
         if not self.llm_config:
             raise ValueError("LLM not configured")
 
+        # --- cache lookup ---
+        cached = None
+        if self._cache_enabled:
+            from selfheal.core.cache import get_cache
+            cache = get_cache(ttl=self._cache_ttl)
+            cache_key = cache.make_key(event)
+            cached = cache.get(cache_key)
+            if cached:
+                logger.info("LLM cache hit for %s", event.error_type)
+                return ClassificationEvent(
+                    original_event=event,
+                    category=cached["category"],
+                    severity=ErrorSeverity(cached["severity"]),
+                    confidence=float(cached["confidence"]),
+                    reasoning=f"[cached] {cached.get('reasoning', '')}",
+                )
+
+        # --- actual LLM call ---
         prompt = self._build_prompt(event)
 
         try:
             response = self._call_llm(prompt)
-            return self._parse_response(event, response)
+            result = self._parse_response(event, response)
+
+            # --- cache write ---
+            if self._cache_enabled and cached is None and result.confidence > 0:
+                from selfheal.core.cache import get_cache
+                cache = get_cache(ttl=self._cache_ttl)
+                cache_key = cache.make_key(event)
+                cache.set(cache_key, {
+                    "category": result.category,
+                    "severity": result.severity.value,
+                    "confidence": result.confidence,
+                    "reasoning": result.reasoning,
+                })
+                logger.debug("LLM cache stored for %s", cache_key)
+
+            return result
         except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             logger.error(f"LLM classification failed: {e}")
-            # Fall back to unknown
             return ClassificationEvent(
                 original_event=event,
                 category="unknown",
@@ -76,8 +115,9 @@ class LLMClassifier(ClassifierInterface):
     def _build_prompt(self, event: TestFailureEvent) -> str:
         """Build classification prompt."""
         categories = ", ".join([
-            "assertion", "import", "timeout", "network",
-            "syntax", "runtime", "unknown"
+            "assertion", "import", "timeout", "network", "syntax",
+            "runtime", "config", "dependency", "resource", "permission",
+            "flaky", "value", "type", "memory", "unknown",
         ])
         severities = ", ".join([s.value for s in ErrorSeverity])
 

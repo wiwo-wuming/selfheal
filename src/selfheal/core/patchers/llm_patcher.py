@@ -31,11 +31,11 @@ class LLMPatcher(PatcherInterface):
 
         provider = self.llm_config.provider.lower()
 
-        if provider == "openai":
+        if provider in ("openai", "deepseek"):
             try:
                 from openai import OpenAI
                 self._client = OpenAI(
-                    api_key=self.llm_config.api_key,
+                    api_key=self.llm_config.get_api_key(),
                     base_url=self.llm_config.base_url,
                 )
             except ImportError:
@@ -43,7 +43,7 @@ class LLMPatcher(PatcherInterface):
         elif provider == "anthropic":
             try:
                 from anthropic import Anthropic
-                self._client = Anthropic(api_key=self.llm_config.api_key)
+                self._client = Anthropic(api_key=self.llm_config.get_api_key())
             except ImportError:
                 raise ImportError("anthropic package not installed")
         else:

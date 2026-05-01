@@ -65,7 +65,12 @@ class PatchStage(PipelineStage):
                     if engine_cfg.strategy_fallback and attempt < engine_cfg.max_retries - 1:
                         continue
             else:
-                patch.status = "generated"
+                patch.status = "pending_review" if not engine_cfg.auto_apply else "generated"
+                if patch.target_file and patch.patch_content:
+                    patch.suggested_command = (
+                        f"python -m selfheal apply {patch.patch_id} "
+                        f"--target {patch.target_file}"
+                    )
                 engine.metrics.record_patch("generated")
                 all_patches.append(patch)
 

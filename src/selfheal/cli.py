@@ -381,6 +381,24 @@ def metrics(ctx: click.Context, config: Optional[str], as_json: bool) -> None:
 
 
 @main.command()
+@click.option("--config", type=click.Path(exists=True), help="Path to config file")
+@click.option("--output", type=click.Path(), default=None, help="Write HTML to file instead of stdout")
+@click.pass_context
+def dashboard(ctx: click.Context, config: Optional[str], output: Optional[str]) -> None:
+    """Generate an HTML dashboard of self-healing statistics."""
+    from selfheal.config import Config as CfgCls
+    from selfheal.core.dashboard import generate_html
+
+    if config:
+        CfgCls.from_file(Path(config))  # trigger experience store setup
+
+    html = generate_html(output_path=output)
+
+    if not output:
+        click.echo(html)
+
+
+@main.command()
 @click.option("--output", type=click.Path(), default="selfheal.yaml", help="Output config file")
 def init(output: str) -> None:
     """Initialize a new SelfHeal configuration."""

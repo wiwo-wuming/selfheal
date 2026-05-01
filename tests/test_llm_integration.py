@@ -12,6 +12,19 @@ from selfheal.events import ClassificationEvent, ErrorSeverity, TestFailureEvent
 
 
 # ---------------------------------------------------------------------------
+# Reset global cache before each test to avoid cross-test pollution
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _reset_cache():
+    """Reset the global LLM response cache before each test."""
+    from selfheal.core.cache import reset_cache
+    reset_cache()
+    yield
+    reset_cache()
+
+
+# ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
 

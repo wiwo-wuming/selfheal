@@ -1,0 +1,18 @@
+{# ConfigError / MissingEnv fix – skip test when config is missing #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 8 }} @@
+ {{ ' ' }}{{ original_code or '# (original config-dependent code)' }}
++# SelfHeal: skip test when required configuration is unavailable
++import pytest
++import os
++
++
++@pytest.mark.skipif(
++    not os.environ.get("SELFHEAL_REQUIRED_CONFIG"),
++    reason="Configuration not available – skipping {{ error_func or 'test' }}"
++)
++def {{ error_func or 'test_config' }}():
++    {{ original_code.strip() if original_code else '# (original config-dependent logic)' }}

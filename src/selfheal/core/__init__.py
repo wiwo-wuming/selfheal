@@ -1,7 +1,7 @@
 """Core components for SelfHeal."""
 
 from selfheal.core.watchers import PytestWatcher, RawLogWatcher, PluginWatcher
-from selfheal.core.classifiers import RuleClassifier, LLMClassifier
+from selfheal.core.classifiers import RuleClassifier, LLMClassifier, HybridClassifier
 from selfheal.core.patchers import TemplatePatcher, LLMPatcher
 from selfheal.core.validators import LocalValidator, DockerValidator
 from selfheal.core.reporters import TerminalReporter, GitHubReporter, WebhookReporter
@@ -23,6 +23,7 @@ __all__ = [
     "PluginWatcher",
     "RuleClassifier",
     "LLMClassifier",
+    "HybridClassifier",
     "TemplatePatcher",
     "LLMPatcher",
     "LocalValidator",
@@ -52,6 +53,7 @@ def register_defaults() -> None:
 
     registry.register_classifier("rule", RuleClassifier)
     registry.register_classifier("llm", LLMClassifier)
+    registry.register_classifier("hybrid", HybridClassifier)
 
     registry.register_patcher("template", TemplatePatcher)
     registry.register_patcher("llm", LLMPatcher)

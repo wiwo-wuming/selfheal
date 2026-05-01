@@ -22,6 +22,14 @@ class ErrorCategory(Enum):
     NETWORK = "network"
     SYNTAX = "syntax"
     RUNTIME = "runtime"
+    CONFIG = "config"
+    DEPENDENCY = "dependency"
+    RESOURCE = "resource"
+    PERMISSION = "permission"
+    FLAKY = "flaky"
+    VALUE = "value"
+    TYPE = "type"
+    MEMORY = "memory"
     UNKNOWN = "unknown"
 
 
@@ -78,8 +86,9 @@ class PatchEvent:
     generator: str  # "template" or "llm"
     target_file: Optional[str] = None  # file path to apply patch to
     backup_path: Optional[str] = None  # backup of original file
-    status: str = "generated"  # generated, applied, rejected, rolled_back
+    status: str = "generated"  # generated, pending_review, applied, rejected, rolled_back
     applied_at: Optional[datetime] = None
+    suggested_command: str = ""  # CLI command hint for manual review mode
 
     def to_dict(self) -> dict:
         return {

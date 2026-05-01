@@ -56,13 +56,29 @@ class RuleConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    """LLM provider configuration."""
+    """LLM provider configuration.
+
+    API keys are resolved in this priority order per provider:
+      - OpenAI:     ``openai_api_key`` → ``${OPENAI_API_KEY}`` env → ``api_key``
+      - Anthropic:  ``anthropic_api_key`` → ``${ANTHROPIC_API_KEY}`` env → ``api_key``
+      - DeepSeek:   ``deepseek_api_key`` → ``${DEEPSEEK_API_KEY}`` env → ``api_key``
+    """
+
     provider: str = "openai"
     model: str = "gpt-4"
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None  # generic fallback (backward-compat)
     base_url: Optional[str] = None
+    # Provider-specific API keys (preferred over generic api_key)
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
+    temperature: float = 0.1
 
-    @field_validator("api_key", "base_url", mode="before")
+    @field_validator(
+        "api_key", "base_url",
+        "openai_api_key", "anthropic_api_key", "deepseek_api_key",
+        mode="before",
+    )
     @classmethod
     def resolve_env_vars(cls, v: Optional[str]) -> Optional[str]:
         """Resolve environment variable placeholders like ${OPENAI_API_KEY}."""
@@ -71,6 +87,21 @@ class LLMConfig(BaseModel):
         if v and isinstance(v, str):
             return v.strip()
         return v
+
+    def get_api_key(self) -> Optional[str]:
+        """Return the effective API key for the configured provider.
+
+        Priority: provider-specific key > generic api_key fallback.
+        """
+        provider_key_map = {
+            "openai": self.openai_api_key,
+            "anthropic": self.anthropic_api_key,
+            "deepseek": self.deepseek_api_key,
+        }
+        specific = provider_key_map.get(self.provider.lower())
+        if specific:
+            return specific
+        return self.api_key
 
 
 class DockerConfig(BaseModel):
@@ -145,6 +176,10 @@ class ClassifierConfig(BaseModel):
     type: str = "rule"
     rules: list[RuleConfig] = Field(default_factory=list)
     llm: Optional[LLMConfig] = None
+    # Hybrid classifier settings
+    confidence_threshold: float = 0.5  # min rule confidence before falling back to LLM
+    cache_enabled: bool = True  # enable LLM response cache
+    cache_ttl: float = 3600.0  # cache TTL in seconds (default 1 hour)
 
 
 class PatcherConfig(BaseModel):
@@ -168,6 +203,7 @@ class ReporterItemConfig(BaseModel):
     enabled: bool = True
     github: Optional[GitHubConfig] = None
     webhook_url: Optional[str] = None
+    webhook_secret: Optional[str] = None  # HMAC-SHA256 shared secret for signing
     webhook_events: list[str] = Field(default_factory=lambda: ["passed", "failed", "error"])
 
 
@@ -188,6 +224,7 @@ class ReporterConfig(BaseModel):
     type: str = "terminal"  # used only in single-reporter mode
     github: Optional[GitHubConfig] = None
     webhook_url: Optional[str] = None
+    webhook_secret: Optional[str] = None  # HMAC-SHA256 shared secret for signing
     webhook_events: list[str] = Field(default_factory=lambda: ["passed", "failed", "error"])
     reporters: list[ReporterItemConfig] = Field(default_factory=list)
 
@@ -203,6 +240,7 @@ class ReporterConfig(BaseModel):
             type=self.type,
             github=self.github,
             webhook_url=self.webhook_url,
+            webhook_secret=self.webhook_secret,
             webhook_events=self.webhook_events,
         )]
 
@@ -264,6 +302,10 @@ class EngineConfig(BaseModel):
     auto_apply: bool = False  # if False, patches are generated but not applied
     backup_dir: str = ".selfheal/backups"
     strategy_fallback: bool = True  # try alternative patcher on failure
+    experience_enabled: bool = True  # record & reuse successful fixes from experience store
+    experience_db_path: str = ".selfheal/experience.db"  # path to experience SQLite database
+    max_concurrency: int = 1  # max concurrent pipeline runs (1 = sequential, >1 = async parallel)
+    async_batch: bool = False  # if True, process_batch uses asyncio for parallel execution
 
 
 class StoreConfig(BaseModel):

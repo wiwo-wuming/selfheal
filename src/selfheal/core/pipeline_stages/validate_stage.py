@@ -79,5 +79,41 @@ class ValidateStage(PipelineStage):
                 error_message="No patches were generated",
             )
 
+        # --- experience learning: record successful patches ---
+        if final.result == "passed":
+            self._record_experience(context, final)
+
         context["final_validation"] = final
         return context
+
+    @staticmethod
+    def _record_experience(context: dict, validation: ValidationEvent) -> None:
+        """Record a successfully validated patch in the experience store."""
+        try:
+            from selfheal.core.experience import get_experience
+
+            event = context.get("event")
+            classification = context.get("classification")
+            if event is None or classification is None:
+                return
+
+            # Handle classification as either dict or ClassificationEvent
+            if isinstance(classification, dict):
+                cat = classification.get("category", "unknown")
+            else:
+                cat = classification.category
+
+            experience = get_experience()
+            experience.record_success(
+                event=event,
+                classification=ClassificationEvent(
+                    original_event=event,
+                    category=cat,
+                    severity=ErrorSeverity.MEDIUM,
+                    confidence=0.0,
+                ) if isinstance(classification, dict) else classification,
+                patch=validation.patch_event,
+            )
+        except Exception:
+            # Experience recording is best-effort; never break the pipeline
+            logger.debug("Experience recording skipped", exc_info=True)

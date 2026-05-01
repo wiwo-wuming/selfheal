@@ -1,6 +1,8 @@
-"""Docker validator implementation."""
+"""Docker validator implementation with graceful degradation."""
 
 import logging
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -13,15 +15,80 @@ logger = logging.getLogger(__name__)
 
 
 class DockerValidator(ValidatorInterface):
-    """Validates patches using Docker containers."""
+    """Validates patches using Docker containers.
+
+    Falls back gracefully when Docker is not installed, providing a clear
+    diagnostic message and an ``"error"`` result rather than crashing.
+    """
 
     def __init__(self, config: ValidatorConfig):
         self.config = config
         self.docker_config = config.docker or DockerConfig()
         self.timeout = config.timeout
         self._client = None
+        self._docker_available: Optional[bool] = None  # cached check
 
     name = "docker"
+
+    def _check_docker_available(self) -> bool:
+        """Check whether Docker is installed and reachable.
+
+        Cached after first call to avoid repeated subprocess invocations.
+
+        The check is skipped when:
+        - ``DockerValidator._test_mode = True`` (set by tests that mock Docker)
+        - ``SELFHEAL_SKIP_DOCKER_CHECK=1`` environment variable
+        """
+        if self._docker_available is not None:
+            return self._docker_available
+
+        # Allow tests and CI to bypass the real Docker check
+        if getattr(DockerValidator, "_test_mode", False):
+            logger.debug("Docker check bypassed (test mode)")
+            self._docker_available = True
+            return True
+
+        if os.environ.get("SELFHEAL_SKIP_DOCKER_CHECK") == "1":
+            logger.debug("Docker check bypassed (SELFHEAL_SKIP_DOCKER_CHECK=1)")
+            self._docker_available = True
+            return True
+
+        # Check 1: docker CLI
+        if shutil.which("docker") is None:
+            logger.warning(
+                "Docker CLI not found on PATH. "
+                "Install Docker Desktop from https://www.docker.com/products/docker-desktop/"
+            )
+            self._docker_available = False
+            return False
+
+        # Check 2: docker daemon is running
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    "Docker daemon not running. Start Docker Desktop and retry.\n"
+                    "  error: %s", result.stderr.strip()[:200]
+                )
+                self._docker_available = False
+                return False
+        except subprocess.TimeoutExpired:
+            logger.warning("Docker daemon check timed out — is Docker Desktop running?")
+            self._docker_available = False
+            return False
+        except Exception as e:
+            logger.warning("Unexpected error checking Docker: %s", e)
+            self._docker_available = False
+            return False
+
+        logger.info("Docker is available and running")
+        self._docker_available = True
+        return True
 
     def _get_client(self):
         """Get or create Docker client."""
@@ -35,9 +102,26 @@ class DockerValidator(ValidatorInterface):
         return self._client
 
     def validate(self, patch: PatchEvent) -> ValidationEvent:
-        """Validate a patch inside a Docker container."""
+        """Validate a patch inside a Docker container.
+
+        If Docker is not available, returns an ``"error"`` result with
+        a clear diagnostic message instead of crashing.
+        """
         start_time = time.time()
         test_path = patch.classification_event.original_event.test_path
+
+        # Graceful degradation: check Docker availability first
+        if not self._check_docker_available():
+            return ValidationEvent(
+                patch_event=patch,
+                result="error",
+                duration=0.0,
+                error_message=(
+                    "Docker is not available. "
+                    "Install Docker Desktop (https://www.docker.com/products/docker-desktop/) "
+                    "or switch validator to 'local'."
+                ),
+            )
 
         logger.info(f"Validating patch in Docker: {test_path}")
 

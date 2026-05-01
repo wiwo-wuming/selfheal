@@ -19,6 +19,39 @@ from selfheal.events import (
 
 
 # ------------------------------------------------------------------
+# Reset global experience store before each test to avoid cross-test pollution
+# ------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _reset_experience():
+    """Reset the global experience store before each test."""
+    from selfheal.core.experience import reset_experience, get_experience
+    import sqlite3
+
+    # Close existing singleton if any
+    reset_experience()
+
+    # Open fresh store and clear all data
+    try:
+        exp = get_experience()
+        exp._get_conn().execute("DELETE FROM experiences")
+        exp._get_conn().commit()
+        exp.close()
+    except Exception:
+        pass
+
+    reset_experience()
+    yield
+
+    try:
+        exp2 = get_experience()
+        exp2.close()
+    except Exception:
+        pass
+    reset_experience()
+
+
+# ------------------------------------------------------------------
 # Traceback parsing tests
 # ------------------------------------------------------------------
 

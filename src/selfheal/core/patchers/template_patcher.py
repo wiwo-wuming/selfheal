@@ -187,7 +187,18 @@ class TemplatePatcher(PatcherInterface):
         }
 
     def generate(self, classification: ClassificationEvent) -> PatchEvent:
-        """Generate a patch using templates."""
+        """Generate a patch using templates, with experience-based reuse.
+
+        Strategy:
+        1. Check the experience store for a previously successful patch.
+        2. If no experience match, fall back to template-based generation.
+        """
+        # --- try experience-based reuse first ---
+        experience_patch = self._try_experience_patch(classification)
+        if experience_patch is not None:
+            return experience_patch
+
+        # --- template-based generation ---
         category = classification.category
         templates_dir = self._templates_dir
 
@@ -200,11 +211,13 @@ class TemplatePatcher(PatcherInterface):
 
         if not template_path.exists():
             logger.warning(f"No template found for category: {category}")
+            fallback_content, fallback_target = self._generate_fallback_patch(classification)
             return PatchEvent(
                 classification_event=classification,
                 patch_id=str(uuid.uuid4()),
-                patch_content=self._generate_fallback_patch(classification),
+                patch_content=fallback_content,
                 generator="template",
+                target_file=fallback_target,
             )
 
         try:
@@ -225,16 +238,47 @@ class TemplatePatcher(PatcherInterface):
             )
         except Exception as e:
             logger.error(f"Template rendering failed: {e}")
+            fallback_content, fallback_target = self._generate_fallback_patch(classification)
             return PatchEvent(
                 classification_event=classification,
                 patch_id=str(uuid.uuid4()),
-                patch_content=self._generate_fallback_patch(classification),
+                patch_content=fallback_content,
                 generator="template",
+                target_file=fallback_target,
             )
 
-    def _generate_fallback_patch(self, classification: ClassificationEvent) -> str:
+    @staticmethod
+    def _try_experience_patch(classification: ClassificationEvent) -> Optional[PatchEvent]:
+        """Search the experience store for a previously successful patch."""
+        try:
+            from selfheal.core.experience import get_experience
+
+            experience = get_experience()
+            similar = experience.find_similar(
+                event=classification.original_event,
+                category=classification.category,
+                limit=1,
+            )
+            if similar:
+                entry = similar[0]
+                logger.info(
+                    "Experience match: reusing patch (signature=%s, success_count=%d)",
+                    entry["signature"], entry["success_count"],
+                )
+                return PatchEvent(
+                    classification_event=classification,
+                    patch_id=str(uuid.uuid4()),
+                    patch_content=entry["patch_content"],
+                    generator=f"experience({entry['generator']})",
+                )
+        except Exception:
+            logger.debug("Experience lookup skipped", exc_info=True)
+        return None
+
+    def _generate_fallback_patch(self, classification: ClassificationEvent) -> tuple[str, Optional[str]]:
         """Generate an executable fallback patch when no template is found.
 
+        Returns a tuple of (patch_content, target_file).
         Produces a unified-diff that wraps the failing code in a defensive
         try/except block so the test suite doesn't abort on this error.
         """
@@ -311,9 +355,104 @@ class TemplatePatcher(PatcherInterface):
                 f"+except {event.error_type} as e:\n"
                 f"+    pytest.xfail(reason=f\"{event.error_type}: {{e}}\")\n"
             ),
+            "config": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},7 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: skip test when config is unavailable\n"
+                f"+import pytest, os\n"
+                f"+@pytest.mark.skipif(\n"
+                f"+    not os.environ.get(\"SELFHEAL_REQUIRED_CONFIG\"),\n"
+                f"+    reason=\"Configuration not available\"\n"
+                f"+)\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
+            "dependency": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},5 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: dependency conflict – test skipped\n"
+                f"+import pytest\n"
+                f"+@pytest.mark.skip(reason=\"Dependency conflict: {event.error_message[:80]}\")\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
+            "resource": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},8 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: skip test when resource is unavailable\n"
+                f"+import pytest\n"
+                f"+from pathlib import Path\n"
+                f"+@pytest.mark.skipif(\n"
+                f"+    not Path(\"{target_file}\").exists(),\n"
+                f"+    reason=\"Required resource not available\"\n"
+                f"+)\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
+            "permission": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},8 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: permission denied – test skipped\n"
+                f"+import pytest, os\n"
+                f"+@pytest.mark.skipif(\n"
+                f"+    not os.access(\"{target_file}\", os.R_OK),\n"
+                f"+    reason=\"Permission denied for target\"\n"
+                f"+)\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
+            "flaky": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},5 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: flaky test – mark as expected intermittent failure\n"
+                f"+import pytest\n"
+                f"+@pytest.mark.flaky(reruns=3, reruns_delay=2)\n"
+                f"+@pytest.mark.xfail(reason=\"Intermittent failure\", strict=False)\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
+            "value": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},7 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: guarded ValueError with xfail\n"
+                f"+import pytest\n"
+                f"+try:\n"
+                f"+    {original_code.strip() if original_code.strip() and not original_code.startswith('#') else 'pass  # (original logic)'}\n"
+                f"+except ValueError as e:\n"
+                f"+    pytest.xfail(reason=f\"ValueError: {{e}}\")\n"
+            ),
+            "type": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},7 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: guarded TypeError with xfail\n"
+                f"+import pytest\n"
+                f"+try:\n"
+                f"+    {original_code.strip() if original_code.strip() and not original_code.startswith('#') else 'pass  # (original logic)'}\n"
+                f"+except TypeError as e:\n"
+                f"+    pytest.xfail(reason=f\"TypeError: {{e}}\")\n"
+            ),
+            "memory": (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},5 @@\n"
+                f"-{original_code}\n"
+                f"+# SelfHeal: memory limit – test skipped\n"
+                f"+import pytest\n"
+                f"+@pytest.mark.skip(reason=\"MemoryError – test skipped to avoid OOM crashes\")\n"
+                f"+def _wrapped(): pass  # (original logic goes here)\n"
+            ),
         }
 
-        return patches.get(
+        content = patches.get(
             category,
             (
                 f"--- a/{target_file}\n"
@@ -328,3 +467,4 @@ class TemplatePatcher(PatcherInterface):
                 f"+    pytest.fail(f\"{event.error_type}: {{e}}\")\n"
             ),
         )
+        return content, target_file

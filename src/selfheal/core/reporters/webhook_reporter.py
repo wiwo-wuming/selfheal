@@ -1,10 +1,13 @@
-"""Webhook reporter for notifications (Slack, Discord, custom)."""
+"""Webhook reporter for notifications (Slack, Discord, custom) with HMAC signing."""
 
+import hashlib
+import hmac
 import json
 import logging
 import time
 import urllib.request
 from datetime import datetime
+from typing import Optional
 
 from selfheal.config import ReporterConfig
 from selfheal.events import ValidationEvent
@@ -18,14 +21,42 @@ _RETRY_DELAY_BASE = 1.0  # seconds, exponential backoff
 
 
 class WebhookReporter(ReporterInterface):
-    """Sends notifications via webhook."""
+    """Sends notifications via webhook with optional HMAC-SHA256 signing."""
 
     name = "webhook"
 
     def __init__(self, config: ReporterConfig):
         self.config = config
         self.webhook_url = config.webhook_url
+        self.webhook_secret: Optional[str] = self._resolve_secret(config)
         self.enabled_events = set(config.webhook_events)
+
+    @staticmethod
+    def _resolve_secret(config: ReporterConfig) -> Optional[str]:
+        """Resolve webhook secret from config, supporting ${ENV} placeholders."""
+        from selfheal.config import _resolve_env
+
+        secret = getattr(config, "webhook_secret", None)
+        if secret and isinstance(secret, str) and "${" in secret:
+            return _resolve_env(secret)
+        if secret and isinstance(secret, str):
+            return secret.strip()
+        return None
+
+    def _compute_signature(self, payload_bytes: bytes) -> str:
+        """Compute HMAC-SHA256 signature for the payload.
+
+        Returns the hex-encoded signature string, or empty if no secret configured.
+        """
+        if not self.webhook_secret:
+            return ""
+
+        mac = hmac.new(
+            self.webhook_secret.encode("utf-8"),
+            payload_bytes,
+            hashlib.sha256,
+        )
+        return mac.hexdigest()
 
     def report(self, event: ValidationEvent) -> None:
         """Send a webhook notification."""
@@ -72,10 +103,18 @@ class WebhookReporter(ReporterInterface):
         for attempt in range(_MAX_RETRIES):
             try:
                 data = json.dumps(payload).encode("utf-8")
+                headers = {"Content-Type": "application/json"}
+
+                # Add HMAC signature if secret is configured
+                signature = self._compute_signature(data)
+                if signature:
+                    headers["X-SelfHeal-Signature"] = f"sha256={signature}"
+                    logger.debug("Webhook request signed with HMAC-SHA256")
+
                 req = urllib.request.Request(
                     self.webhook_url,
                     data=data,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                 )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     logger.info(f"Webhook sent, status: {resp.status}")

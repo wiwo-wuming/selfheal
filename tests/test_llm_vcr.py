@@ -144,10 +144,10 @@ except ImportError:
 @pytest.mark.vcr
 @pytest.mark.skipif(
     not (_has_api_key("anthropic") or (_has_anthropic and os.environ.get("CI") == "1")),
-    reason="ANTHROPIC_API_KEY not set and anthropic package not installed or no cassette",
+    reason="ANTHROPIC_API_KEY not set and no cassette available for replay",
 )
 class TestAnthropicClassifierVCR:
-    """VCR-based tests for Anthropic LLM classifier with real API responses."""
+    """VCR-based tests for Anthropic LLM classifier — validates multi-provider consistency."""
 
     @pytest.fixture
     def anthropic_classifier(self):
@@ -170,6 +170,123 @@ class TestAnthropicClassifierVCR:
             result = anthropic_classifier.classify(failure)
         assert result.category in ("assertion", "unknown")
         assert result.confidence is not None
+
+    def test_anthropic_classify_import(self, vcr_anthropic, anthropic_classifier):
+        """Classify an import error via Anthropic."""
+        failure = _make_failure("ImportError", "No module named 'requests'")
+        with vcr_anthropic.use_cassette("test_anthropic_classify_import.yaml"):
+            result = anthropic_classifier.classify(failure)
+        assert result.category in ("import", "unknown")
+        assert result.confidence is not None
+
+    def test_anthropic_classify_timeout(self, vcr_anthropic, anthropic_classifier):
+        """Classify a timeout error via Anthropic."""
+        failure = _make_failure("TimeoutError", "Connection timed out after 30s")
+        with vcr_anthropic.use_cassette("test_anthropic_classify_timeout.yaml"):
+            result = anthropic_classifier.classify(failure)
+        assert result.category in ("timeout", "network", "unknown")
+        assert result.confidence is not None
+
+    def test_anthropic_classify_network(self, vcr_anthropic, anthropic_classifier):
+        """Classify a connection error via Anthropic."""
+        failure = _make_failure(
+            "ConnectionError",
+            "Failed to establish connection to api.example.com",
+        )
+        with vcr_anthropic.use_cassette("test_anthropic_classify_network.yaml"):
+            result = anthropic_classifier.classify(failure)
+        assert result.category in ("network", "timeout", "unknown")
+        assert result.confidence is not None
+
+    def test_anthropic_classify_runtime(self, vcr_anthropic, anthropic_classifier):
+        """Classify a runtime error via Anthropic."""
+        failure = _make_failure("TypeError", "unsupported operand type(s) for +: 'int' and 'str'")
+        with vcr_anthropic.use_cassette("test_anthropic_classify_runtime.yaml"):
+            result = anthropic_classifier.classify(failure)
+        assert result.category in ("type", "runtime", "value", "unknown")
+        assert result.confidence is not None
+
+    def test_anthropic_classify_large_error(self, vcr_anthropic, anthropic_classifier):
+        """Classify an error with a long traceback via Anthropic."""
+        long_tb = "\n".join(
+            [f"  File \"module_{i}.py\", line {i}, in func_{i}" for i in range(20)]
+        ) + "\nValueError: invalid input in processing pipeline"
+        failure = TestFailureEvent(
+            test_path="tests/test_pipeline.py::test_complex",
+            error_type="ValueError",
+            error_message="Invalid value encountered during processing.",
+            traceback=long_tb,
+        )
+        with vcr_anthropic.use_cassette("test_anthropic_classify_large_error.yaml"):
+            result = anthropic_classifier.classify(failure)
+        assert result.category is not None
+        assert result.confidence is not None
+
+
+# ---------------------------------------------------------------------------
+# Anthropic LLM Patcher VCR tests (conditional)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.vcr
+@pytest.mark.skipif(
+    not (_has_api_key("anthropic") or (_has_anthropic and os.environ.get("CI") == "1")),
+    reason="ANTHROPIC_API_KEY not set and no cassette available for replay",
+)
+class TestAnthropicPatcherVCR:
+    """VCR-based tests for Anthropic LLM patcher — validates multi-provider patch generation."""
+
+    @pytest.fixture
+    def anthropic_patcher(self):
+        """Create an LLMPatcher configured for Anthropic."""
+        from selfheal.events import ClassificationEvent, ErrorSeverity
+        from selfheal.core.patchers.llm_patcher import LLMPatcher
+
+        cfg = PatcherConfig(
+            type="llm",
+            llm=LLMConfig(
+                provider="anthropic",
+                model="claude-3-haiku-20240307",
+                api_key="${ANTHROPIC_API_KEY}",
+                temperature=0.2,
+            ),
+        )
+        self._cls = ClassificationEvent(
+            original_event=_make_failure("AssertionError", "assert add(1, 2) == 4"),
+            category="assertion",
+            severity=ErrorSeverity.MEDIUM,
+            confidence=0.85,
+        )
+        return LLMPatcher(cfg)
+
+    def test_anthropic_patch_assertion_error(self, vcr_anthropic, anthropic_patcher):
+        """Generate a patch for an assertion error via Anthropic."""
+        with vcr_anthropic.use_cassette("test_anthropic_patch_assertion_error.yaml"):
+            result = anthropic_patcher.generate(self._cls)
+        assert result.patch_content is not None
+        assert len(result.patch_content) > 0
+        assert result.generator == "llm"
+
+    def test_anthropic_patch_import_error(self, vcr_anthropic, anthropic_patcher):
+        """Generate a patch for an import error via Anthropic."""
+        from selfheal.events import ClassificationEvent, ErrorSeverity
+        cls = ClassificationEvent(
+            original_event=_make_failure("ImportError", "No module named 'requests'"),
+            category="import",
+            severity=ErrorSeverity.HIGH,
+            confidence=0.9,
+        )
+        with vcr_anthropic.use_cassette("test_anthropic_patch_import_error.yaml"):
+            result = anthropic_patcher.generate(cls)
+        assert result.patch_content is not None
+        assert len(result.patch_content) > 0
+
+    def test_anthropic_patch_no_markdown_fences(self, vcr_anthropic, anthropic_patcher):
+        """Verify the Anthropic patcher strips markdown fences from output."""
+        with vcr_anthropic.use_cassette("test_anthropic_patch_no_markdown_fences.yaml"):
+            result = anthropic_patcher.generate(self._cls)
+        assert result.patch_content is not None
+        # Patch content should not contain markdown fences
+        assert "```" not in result.patch_content.strip()
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ class MetricsCollector:
         self.classifications: dict[str, int] = defaultdict(int)
         self.severities: dict[str, int] = defaultdict(int)
         self.patch_results: dict[str, int] = defaultdict(int)
+        self._pipeline_times: dict[str, list[float]] = defaultdict(list)
         self.validation_durations: list[float] = []
         self.pipeline_durations: list[float] = []
         self.success_count: int = 0

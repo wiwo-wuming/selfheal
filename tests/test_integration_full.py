@@ -55,6 +55,18 @@ from tests.conftest import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Module-level: bypass real Docker check for tests that mock Docker SDK
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _bypass_docker_check():
+    """Bypass real Docker availability check — tests mock Docker SDK."""
+    DockerValidator._test_mode = True
+    yield
+    DockerValidator._test_mode = False
+
+
 # ===========================================================================
 # LLM Classifier — Full Integration Tests
 # ===========================================================================

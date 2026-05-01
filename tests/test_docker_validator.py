@@ -1,5 +1,6 @@
 """Integration tests for Docker validator (mock subprocess/Docker SDK)."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,18 @@ from selfheal.events import (
     PatchEvent,
     TestFailureEvent,
 )
+
+
+# ---------------------------------------------------------------------------
+# Module-level setup: bypass real Docker check for all tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _bypass_docker_check(monkeypatch):
+    """Bypass real Docker availability check — tests mock Docker SDK."""
+    DockerValidator._test_mode = True
+    yield
+    DockerValidator._test_mode = False
 
 
 # ---------------------------------------------------------------------------

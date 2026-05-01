@@ -50,12 +50,23 @@ class TerminalReporter(ReporterInterface):
             print(f"  Reasoning: {classification.reasoning}")
 
     def _print_patch(self, event: ValidationEvent) -> None:
-        """Print patch details."""
+        """Print patch details with pending-review indicator."""
         patch = event.patch_event
 
         print("\n[Generated Patch]")
         print(f"  ID: {patch.patch_id}")
         print(f"  Generator: {patch.generator}")
+        print(f"  Status: {self._format_patch_status(patch)}")
+
+        if patch.target_file:
+            print(f"  Target: {patch.target_file}")
+
+        # Show review gate when patch was generated but not applied
+        if patch.status in ("generated", "pending_review"):
+            print(f"\n  WARNING: PATCH NOT AUTO-APPLIED (safety gate)")
+            print(f"  Reason: auto_apply is disabled in engine config")
+            print(f"  Action: Review the patch preview below, then apply manually")
+
         print(f"  Preview:")
         print("  " + "-" * 50)
 
@@ -67,6 +78,18 @@ class TerminalReporter(ReporterInterface):
             print("  ...")
 
         print("  " + "-" * 50)
+
+    @staticmethod
+    def _format_patch_status(patch) -> str:
+        """Colorize patch status for readability."""
+        colors = {
+            "generated": "\033[93mGENERATED (pending review)\033[0m",
+            "pending_review": "\033[93mPENDING REVIEW\033[0m",
+            "applied": "\033[92mAPPLIED\033[0m",
+            "rejected": "\033[91mREJECTED\033[0m",
+            "rolled_back": "\033[91mROLLED BACK\033[0m",
+        }
+        return colors.get(patch.status, patch.status.upper())
 
     def _print_result(self, event: ValidationEvent) -> None:
         """Print validation result."""
@@ -83,6 +106,8 @@ class TerminalReporter(ReporterInterface):
                 print(f"    {line}")
         elif event.result == "passed":
             print("  All tests passed!")
+        elif event.result == "error":
+            print(f"  Error: {event.error_message[:200]}")
 
     def _print_footer(self) -> None:
         """Print report footer."""

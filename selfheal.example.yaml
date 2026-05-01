@@ -8,13 +8,23 @@ engine:
   auto_apply: false           # Set to true to auto-apply patches (DANGEROUS!)
   backup_dir: .selfheal/backups  # Where backups are stored
   strategy_fallback: true     # Try alternative patcher on repeated failure
+  experience_enabled: true    # Record & reuse successful fixes via experience store
+  experience_db_path: .selfheal/experience.db  # Experience store SQLite path
+  max_concurrency: 4          # Max concurrent pipeline runs (1 = sequential)
+  async_batch: false          # If true, batch processing uses asyncio parallelism
 
 # --- LLM Provider (optional, for AI-powered classification/patching) ---
 llm:
-  provider: openai            # openai or anthropic
+  provider: openai            # openai, deepseek, or anthropic
   model: gpt-4
-  api_key: ${OPENAI_API_KEY}  # Use env var for security
+  # Generic fallback (shared by all providers if no specific key is set):
+  api_key: ${OPENAI_API_KEY}
+  # Provider-specific keys (preferred over generic api_key):
+  # openai_api_key: ${OPENAI_API_KEY}
+  # deepseek_api_key: ${DEEPSEEK_API_KEY}
+  # anthropic_api_key: ${ANTHROPIC_API_KEY}
   # base_url: https://api.openai.com/v1  # Optional custom endpoint
+  # temperature: 0.1  # LLM temperature (default: 0.1)
 
 # --- Watcher (failure detection) ---
 watcher:
