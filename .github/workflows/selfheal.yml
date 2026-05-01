@@ -16,6 +16,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Opt into Node.js 24 to suppress deprecation warnings
 
 jobs:
   # -------------------------------------------------------------------
