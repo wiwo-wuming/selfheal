@@ -1,0 +1,83 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Classify the following test failure.\n\nError
+      Type: TimeoutError\nError Message: Connection timed out after 30s\n\nTraceback:\nTraceback
+      (most recent call last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert
+      1 == 2\nAssertionError: assert 1 == 2\n\nCategories: assertion, import, timeout,
+      network, syntax, runtime, unknown\nSeverities: critical, high, medium, low\n\nRespond
+      with JSON:\n{\n    \"category\": \"<most likely category>\",\n    \"severity\":
+      \"<severity level>\",\n    \"confidence\": <0.0-1.0>,\n    \"reasoning\": \"<brief
+      explanation>\"\n}"}],"model":"deepseek-chat","temperature":0.1}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '652'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - OpenAI/Python 2.32.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.32.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.deepseek.com/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"cf721c2a-dbb3-4f79-a6a1-10af3df86e6d","object":"chat.completion","created":1777641174,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"{\n    \"category\":
+        \"assertion\",\n    \"severity\": \"medium\",\n    \"confidence\": 0.95,\n    \"reasoning\":
+        \"The traceback shows the actual failure is an AssertionError on line 5 (''assert
+        1 == 2''), not a timeout. The TimeoutError message is misleading or from a
+        different context; the root cause is a failed assertion in the test logic.\"\n}"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":153,"completion_tokens":86,"total_tokens":239,"prompt_tokens_details":{"cached_tokens":128},"prompt_cache_hit_tokens":128,"prompt_cache_miss_tokens":25},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 01 May 2026 13:12:54 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '12398135347442051161'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - d01b867c9ae8dd30b5cc5a14114b0349
+    status:
+      code: 200
+      message: OK
+version: 1

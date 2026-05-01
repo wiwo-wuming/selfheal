@@ -63,6 +63,8 @@ class PatchApplier:
 
             return success
 
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Error applying patch {patch.patch_id}: {e}")
             # Attempt rollback
@@ -91,6 +93,8 @@ class PatchApplier:
             patch.status = "rolled_back"
             logger.info(f"Rolled back patch {patch.patch_id}")
             return True
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Rollback failed for {patch.patch_id}: {e}")
             return False
@@ -134,6 +138,8 @@ class PatchApplier:
 
             target_path.write_text("".join(patched_lines), encoding="utf-8")
             return True
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.warning(f"Diff application failed: {e}")
             return False
@@ -245,6 +251,8 @@ class PatchApplier:
         except FileNotFoundError:
             logger.warning("'patch' command not available on this system")
             return False
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.warning(f"subprocess patch failed: {e}")
             return False
@@ -261,6 +269,8 @@ class PatchApplier:
 
             target_path.write_text(code, encoding="utf-8")
             return True
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Replacement application failed: {e}")
             return False

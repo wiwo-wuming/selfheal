@@ -1,0 +1,96 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Generate a fix for the following
+      test failure.\n\nTest: tests/test_calc.py::test_foo\nError Type: AssertionError\nError
+      Message: assert 1 == 2\nCategory: assertion\nSeverity: medium\n\nTraceback:\nTraceback
+      (most recent call last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert
+      1 == 2\nAssertionError: assert 1 == 2\n\nGenerate a patch that fixes this issue.
+      Respond with:\n1. Brief explanation of the fix\n2. The complete code patch\n\nCode
+      should be well-formatted and follow best practices."}],"model":"deepseek-chat","temperature":0.2}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '590'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - OpenAI/Python 2.32.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.32.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.deepseek.com/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"2a61685e-d5a3-4eed-b4b4-0ef8e3909750","object":"chat.completion","created":1777641128,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"##
+        Brief Explanation\n\nThe test failure occurs because the assertion `assert
+        1 == 2` is checking that 1 equals 2, which is always false. This appears to
+        be a placeholder or incorrectly implemented test. The fix depends on the intended
+        behavior of the test. Since we don''t have the full context of what `test_foo`
+        should be testing, I''ll provide a fix that makes the test pass by correcting
+        the assertion to a valid comparison, while noting that the actual test logic
+        should be implemented based on the specific requirements.\n\n## Code Patch\n\n```diff\n---
+        a/tests/test_calc.py\n+++ b/tests/test_calc.py\n@@ -1,5 +1,5 @@\n def test_foo():\n-    assert
+        1 == 2\n+    # TODO: Implement actual test logic\n+    # Placeholder assertion
+        - replace with meaningful test\n+    assert 1 == 1\n```\n\n**Alternative fix**
+        (if this is meant to test a specific function):\n\n```diff\n--- a/tests/test_calc.py\n+++
+        b/tests/test_calc.py\n@@ -1,5 +1,5 @@\n+from calc import add  # Assuming there''s
+        a calc module with an add function\n+\n def test_foo():\n-    assert 1 ==
+        2\n+    result = add(1, 1)\n+    assert result == 2\n```\n\n**Note:** The
+        appropriate fix depends on what `test_foo` is intended to test. If this is
+        a placeholder test, the first fix is appropriate. If it''s meant to test actual
+        functionality, the second fix (or similar) should be implemented with the
+        correct function and expected values."},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":135,"completion_tokens":352,"total_tokens":487,"prompt_tokens_details":{"cached_tokens":0},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":135},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 01 May 2026 13:12:08 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '645313852790491742'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - 6a9897dfac3409d75c40aff3c6642ffb
+    status:
+      code: 200
+      message: OK
+version: 1

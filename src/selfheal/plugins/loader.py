@@ -100,6 +100,8 @@ class PluginLoader:
                     # Track the base directory for reliable hot-reloading
                     self._loaded_module_dirs[name] = resolved_path
                     logger.info(f"Loaded plugin: {name}")
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception as e:
                     logger.error(f"Failed to load plugin {name}: {e}")
         finally:
@@ -178,6 +180,8 @@ class PluginLoader:
                 finally:
                     if path_added and module_dir:
                         sys.path.remove(module_dir)
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Failed to reload module {module_name}: {e}")
             return False
@@ -223,6 +227,8 @@ class PluginLoader:
             finally:
                 if not path_in_syspath:
                     sys.path.remove(base_str)
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Failed to load/reload plugin {file_path}: {e}")
             return False
@@ -249,6 +255,8 @@ class PluginLoader:
                 full_name = f"{package.__name__}.{name}"
                 module = importlib.import_module(full_name)
                 self._register_plugin_module(module, module_path=full_name)
+            except (KeyboardInterrupt, SystemExit):
+                raise
             except Exception as e:
                 logger.error(f"Failed to discover plugin {name}: {e}")
 

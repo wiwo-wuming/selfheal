@@ -52,6 +52,8 @@ class GitHubReporter(ReporterInterface):
 
             logger.info(f"Created GitHub Issue #{issue.number}")
 
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
             logger.error(f"Failed to create GitHub Issue: {e}")
 
@@ -68,6 +70,11 @@ class GitHubReporter(ReporterInterface):
         original = classification.original_event
         patch = event.patch_event
 
+        alt_cats = ""
+        if classification.alternative_categories:
+            ac = ", ".join(classification.alternative_categories)
+            alt_cats = f"- **Alternative Categories:** {ac}\n"
+
         body = f"""## Test Failure
 
 **Test Path:** `{original.test_path}`
@@ -79,7 +86,7 @@ class GitHubReporter(ReporterInterface):
 - **Category:** {classification.category}
 - **Severity:** {classification.severity.value}
 - **Confidence:** {classification.confidence:.0%}
-
+{alt_cats}
 ## Generated Patch
 
 ```python

@@ -56,6 +56,9 @@ class SelfHealEngine:
         ("store", "store"),
     ]
 
+    # Severity ordering for skip_if_severity_below comparisons
+    _SEVERITY_ORDER = {ErrorSeverity.LOW: 0, ErrorSeverity.MEDIUM: 1, ErrorSeverity.HIGH: 2, ErrorSeverity.CRITICAL: 3}
+
     def __init__(self, config: Optional[Config] = None, hooks: Optional[list[Hook]] = None):
         self.config = config or Config.load_default()
         self.registry = get_registry()
@@ -117,7 +120,10 @@ class SelfHealEngine:
                     f"Unknown pipeline stage '{stage_cfg.type}', skipping"
                 )
                 continue
-            self._pipeline.append(stage_cls())
+            instance = stage_cls()
+            # Attach stage config to instance for severity-skip logic
+            instance._stage_config = stage_cfg
+            self._pipeline.append(instance)
 
     def _resolve_target_file(self, test_path: str) -> Optional[str]:
         """Resolve the likely source file for a given test path.
@@ -188,10 +194,19 @@ class SelfHealEngine:
         for stage in self._pipeline:
             stage_name = stage.name
 
+            # --- severity-based conditional skip ---
+            if self._should_skip_stage(stage, context):
+                logger.info(
+                    "Pipeline stage '%s' skipped — severity below threshold", stage_name
+                )
+                continue
+
             # --- before-stage hooks ---
             for hook in self._hooks:
                 try:
                     hook.before_stage(stage_name, context, self)
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception as exc:
                     logger.warning(
                         "Hook %s.before_stage(%s) failed: %s",
@@ -202,6 +217,8 @@ class SelfHealEngine:
             stage_error: Exception | None = None
             try:
                 context = stage.process(context, self)
+            except (KeyboardInterrupt, SystemExit):
+                raise
             except Exception as exc:
                 logger.error(
                     f"Pipeline stage '{stage_name}' failed: {exc}", exc_info=True
@@ -213,6 +230,8 @@ class SelfHealEngine:
             for hook in self._hooks:
                 try:
                     hook.after_stage(stage_name, context, self, error=stage_error)
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception as exc:
                     logger.warning(
                         "Hook %s.after_stage(%s) failed: %s",
@@ -378,6 +397,40 @@ class SelfHealEngine:
         self._plugin_watcher = None
         self.store.close()
         logger.info("Engine shutdown complete")
+
+    def _should_skip_stage(self, stage: PipelineStage, context: dict) -> bool:
+        """Check whether a pipeline stage should be skipped based on severity.
+
+        If the stage has a ``skip_if_severity_below`` threshold configured and
+        the classified severity in context is below that threshold, the stage
+        is skipped to avoid wasting resources on low-severity failures.
+        """
+        stage_cfg = getattr(stage, "_stage_config", None)
+        if stage_cfg is None:
+            return False
+        threshold_str = stage_cfg.skip_if_severity_below
+        if threshold_str is None:
+            return False
+
+        # Find the classified severity from context
+        classification = context.get("classification")
+        if classification is None:
+            # Before classify stage, always run
+            return False
+
+        severity = classification.get("severity") if isinstance(classification, dict) else getattr(classification, "severity", None)
+        if severity is None:
+            return False
+
+        try:
+            threshold = ErrorSeverity(threshold_str)
+        except ValueError:
+            logger.warning("Invalid skip_if_severity_below value: %s", threshold_str)
+            return False
+
+        current_order = self._SEVERITY_ORDER.get(severity, 1)
+        threshold_order = self._SEVERITY_ORDER.get(threshold, 1)
+        return current_order < threshold_order
 
     def get_metrics_report(self) -> str:
         """Get a formatted metrics report."""

@@ -1,0 +1,84 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Classify the following test failure.\n\nError
+      Type: AssertionError\nError Message: assert add(1, 2) == 4\n\nTraceback:\nTraceback
+      (most recent call last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert
+      1 == 2\nAssertionError: assert 1 == 2\n\nCategories: assertion, import, timeout,
+      network, syntax, runtime, unknown\nSeverities: critical, high, medium, low\n\nRespond
+      with JSON:\n{\n    \"category\": \"<most likely category>\",\n    \"severity\":
+      \"<severity level>\",\n    \"confidence\": <0.0-1.0>,\n    \"reasoning\": \"<brief
+      explanation>\"\n}"}],"model":"deepseek-chat","temperature":0.1}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '645'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - OpenAI/Python 2.32.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.32.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.deepseek.com/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"a311f4cc-cc6d-43c9-8f09-8d07a89b4c75","object":"chat.completion","created":1777641120,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"{\n    \"category\":
+        \"assertion\",\n    \"severity\": \"medium\",\n    \"confidence\": 0.95,\n    \"reasoning\":
+        \"The error is an AssertionError from a failed assertion (assert add(1, 2)
+        == 4), indicating a logic or test expectation mismatch, not an import, timeout,
+        network, syntax, or runtime issue. Severity is medium because it''s a test
+        failure but not a system crash or critical bug.\"\n}"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":157,"completion_tokens":98,"total_tokens":255,"prompt_tokens_details":{"cached_tokens":0},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":157},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 01 May 2026 13:12:00 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '10906700613618932096'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - 363013b48f58cf83eecb01dce6c5f10a
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -369,6 +369,8 @@ def metrics(ctx: click.Context, config: Optional[str], as_json: bool) -> None:
                     elif event_type == "validation":
                         collector.record_validation(event.result, event.duration)
             store.close()
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception as e:
         click.echo(f"Warning: could not load historical metrics from store: {e}", err=True)
 

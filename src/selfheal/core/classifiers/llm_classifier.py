@@ -35,7 +35,10 @@ class LLMClassifier(ClassifierInterface):
         if provider == "openai":
             try:
                 from openai import OpenAI
-                self._client = OpenAI(api_key=self.llm_config.api_key)
+                self._client = OpenAI(
+                    api_key=self.llm_config.api_key,
+                    base_url=self.llm_config.base_url,
+                )
             except ImportError:
                 raise ImportError("openai package not installed. Run: pip install selfheal[llm]")
         elif provider == "anthropic":
@@ -59,7 +62,7 @@ class LLMClassifier(ClassifierInterface):
         try:
             response = self._call_llm(prompt)
             return self._parse_response(event, response)
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             logger.error(f"LLM classification failed: {e}")
             # Fall back to unknown
             return ClassificationEvent(

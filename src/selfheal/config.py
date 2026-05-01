@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def _resolve_env(value: str) -> str:
     """Resolve ${ENV_VAR} references in config values."""
     pattern = re.compile(r"\$\{([^}]+)\}")
-    return pattern.sub(lambda m: os.environ.get(m.group(1), ""), value)
+    return pattern.sub(lambda m: os.environ.get(m.group(1), "").strip(), value)
 
 
 class RuleConfig(BaseModel):
@@ -67,7 +67,9 @@ class LLMConfig(BaseModel):
     def resolve_env_vars(cls, v: Optional[str]) -> Optional[str]:
         """Resolve environment variable placeholders like ${OPENAI_API_KEY}."""
         if v and isinstance(v, str) and "${" in v:
-            return _resolve_env(v)
+            return _resolve_env(v).strip()
+        if v and isinstance(v, str):
+            return v.strip()
         return v
 
 
@@ -210,6 +212,25 @@ class PipelineStageConfig(BaseModel):
     type: str = Field(..., description="Stage name: classify, patch, validate, report, store")
     enabled: bool = True
     retry: int = 1  # max retries for this stage (used by patch stage)
+    skip_if_severity_below: Optional[str] = Field(
+        default=None,
+        description="Skip this stage if the classified severity is below this threshold. "
+                    "One of: low, medium, high, critical. 'low' means everything runs; "
+                    "'critical' means only critical failures go through this stage.",
+    )
+
+    @field_validator("skip_if_severity_below", mode="before")
+    @classmethod
+    def validate_severity_threshold(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        allowed = {"low", "medium", "high", "critical"}
+        normalized = v.strip().lower()
+        if normalized not in allowed:
+            raise ValueError(
+                f"Invalid severity threshold '{v}'. Must be one of: {', '.join(sorted(allowed))}"
+            )
+        return normalized
 
 
 class PipelineConfig(BaseModel):

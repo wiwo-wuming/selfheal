@@ -34,6 +34,8 @@ class ReportStage(PipelineStage):
         for reporter in reporters:
             try:
                 reporter.report(final)
+            except (KeyboardInterrupt, SystemExit):
+                raise
             except Exception as exc:
                 logger.error(
                     f"Reporter '{getattr(reporter, 'name', reporter.__class__.__name__)}' "

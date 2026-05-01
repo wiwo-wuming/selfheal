@@ -14,24 +14,6 @@ from selfheal.core.watchers.plugin_watcher import PluginWatcher
 
 
 @pytest.fixture
-def temp_plugin_dir():
-    """Create a temporary directory with a plugin file."""
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp).resolve()
-        (root / "hot_plugin.py").write_text("""\
-from selfheal.interfaces.validator import ValidatorInterface
-from selfheal.events import PatchEvent, ValidationEvent
-
-class HotValidator(ValidatorInterface):
-    name = "hot_validator"
-
-    def validate(self, patch: PatchEvent) -> ValidationEvent:
-        return ValidationEvent(patch_event=patch, result="passed")
-""")
-        yield root
-
-
-@pytest.fixture
 def watcher_config(temp_plugin_dir):
     """A WatcherConfig pointing at the temp plugin dir."""
     return WatcherConfig(

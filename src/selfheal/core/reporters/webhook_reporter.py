@@ -80,6 +80,8 @@ class WebhookReporter(ReporterInterface):
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     logger.info(f"Webhook sent, status: {resp.status}")
                     return  # success, no need to retry
+            except (KeyboardInterrupt, SystemExit):
+                raise
             except Exception as e:
                 last_error = e
                 if attempt < _MAX_RETRIES - 1:

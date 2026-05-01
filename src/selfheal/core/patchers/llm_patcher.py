@@ -34,7 +34,10 @@ class LLMPatcher(PatcherInterface):
         if provider == "openai":
             try:
                 from openai import OpenAI
-                self._client = OpenAI(api_key=self.llm_config.api_key)
+                self._client = OpenAI(
+                    api_key=self.llm_config.api_key,
+                    base_url=self.llm_config.base_url,
+                )
             except ImportError:
                 raise ImportError("openai package not installed")
         elif provider == "anthropic":
@@ -65,7 +68,7 @@ class LLMPatcher(PatcherInterface):
                 patch_content=content,
                 generator="llm",
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             logger.error(f"LLM patch generation failed: {e}")
             return PatchEvent(
                 classification_event=classification,

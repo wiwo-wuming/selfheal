@@ -1,0 +1,84 @@
+interactions:
+- request:
+    body: '{"messages":[{"role":"user","content":"Classify the following test failure.\n\nError
+      Type: ImportError\nError Message: No module named ''requests''\n\nTraceback:\nTraceback
+      (most recent call last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert
+      1 == 2\nAssertionError: assert 1 == 2\n\nCategories: assertion, import, timeout,
+      network, syntax, runtime, unknown\nSeverities: critical, high, medium, low\n\nRespond
+      with JSON:\n{\n    \"category\": \"<most likely category>\",\n    \"severity\":
+      \"<severity level>\",\n    \"confidence\": <0.0-1.0>,\n    \"reasoning\": \"<brief
+      explanation>\"\n}"}],"model":"deepseek-chat","temperature":0.1}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '647'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - OpenAI/Python 2.32.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.32.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.deepseek.com/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"7b3a7aba-f222-401f-8e74-a1e1264f9468","object":"chat.completion","created":1777641122,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"{\n    \"category\":
+        \"import\",\n    \"severity\": \"high\",\n    \"confidence\": 0.95,\n    \"reasoning\":
+        \"The error type is ImportError with message ''No module named ''requests'''',
+        indicating a missing dependency. Although the traceback shows an AssertionError
+        from a later assertion, the primary failure is the import error, which prevents
+        the test from running correctly.\"\n}"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":150,"completion_tokens":82,"total_tokens":232,"prompt_tokens_details":{"cached_tokens":0},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":150},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 01 May 2026 13:12:02 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '658703081507050314'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - 2e5e7f0c9bf53d4a65e12591e6059f67
+    status:
+      code: 200
+      message: OK
+version: 1
