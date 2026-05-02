@@ -1,4 +1,4 @@
-"""Patch generation + apply pipeline stage (with retry)."""
+"""Patch generation + apply pipeline stage (with retry and dry-run support)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,10 @@ class PatchStage(PipelineStage):
 
     This stage encapsulates the inner retry loop that was previously
     hard-coded inside ``SelfHealEngine.process_failure``.
+
+    Dry-run mode: when ``engine.config.engine.dry_run = True``, patches are
+    generated and previewed but never applied. Validation still runs against
+    the original (unmodified) code.
 
     Validation is handled by the separate ``ValidateStage`` which reads
     ``context["patches"]`` produced here.
@@ -52,6 +56,16 @@ class PatchStage(PipelineStage):
             logger.info(
                 f"Generated patch: {patch.patch_id} -> {patch.target_file}"
             )
+
+            # Dry-run mode: preview but don't apply
+            if engine_cfg.dry_run:
+                preview = engine.applier.dry_run_preview(patch)
+                logger.info("Dry-run preview:\n%s", preview)
+                patch.status = "dry_run"
+                engine.metrics.record_patch("dry_run")
+                all_patches.append(patch)
+                # Don't retry in dry-run mode; one preview is enough
+                continue
 
             # Apply patch (if auto_apply is enabled)
             if engine_cfg.auto_apply and patch.target_file:

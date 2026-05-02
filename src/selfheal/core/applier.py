@@ -1,9 +1,10 @@
-"""Patch applier with backup and rollback support."""
+"""Patch applier with backup, rollback, dry-run preview, and lifecycle management."""
 
+import json
 import logging
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -12,15 +13,26 @@ from selfheal.events import PatchEvent
 
 logger = logging.getLogger(__name__)
 
+BACKUP_INDEX_FILE = ".selfheal/backup_index.json"
+
 
 class PatchApplier:
-    """Applies patches to source files with automatic backup and rollback."""
+    """Applies patches to source files with automatic backup and rollback.
+
+    Features:
+    - Automatic backup before patch application
+    - Rollback on application failure
+    - Dry-run preview (shows diff without modifying files)
+    - Persistent backup index (survives process restarts)
+    - Backup lifecycle management (cleanup old backups)
+    """
 
     def __init__(self, config: EngineConfig):
         self.config = config
         self.backup_dir = Path(config.backup_dir)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         self._applied_patches: dict[str, str] = {}  # patch_id -> backup_path
+        self._load_backup_index()
 
     def apply(self, patch: PatchEvent) -> bool:
         """Apply a patch to the target file.
@@ -55,6 +67,7 @@ class PatchApplier:
                 patch.status = "applied"
                 patch.applied_at = datetime.now()
                 self._applied_patches[patch.patch_id] = str(backup_path)
+                self._save_backup_index()
                 logger.info(f"Patch {patch.patch_id} applied to {target_path}")
             else:
                 self._rollback(target_path, backup_path)
@@ -86,11 +99,16 @@ class PatchApplier:
         backup = Path(patch.backup_path)
         if not backup.exists():
             logger.error(f"Backup file not found: {backup}")
+            # Remove stale index entry
+            self._applied_patches.pop(patch.patch_id, None)
+            self._save_backup_index()
             return False
 
         try:
             shutil.copy2(str(backup), target_file)
             patch.status = "rolled_back"
+            self._applied_patches.pop(patch.patch_id, None)
+            self._save_backup_index()
             logger.info(f"Rolled back patch {patch.patch_id}")
             return True
         except (KeyboardInterrupt, SystemExit):
@@ -300,3 +318,155 @@ class PatchApplier:
     def get_backup_path(self, patch_id: str) -> Optional[str]:
         """Get the backup path for a patch."""
         return self._applied_patches.get(patch_id)
+
+    # --- Dry-run preview ---
+
+    def dry_run_preview(self, patch: PatchEvent) -> str:
+        """Preview what a patch would change without modifying any files.
+
+        Returns a human-readable summary of the changes.
+        """
+        target = patch.target_file
+        if not target:
+            return "[dry-run] No target file specified — nothing to preview."
+
+        target_path = Path(target)
+        if not target_path.exists():
+            return f"[dry-run] Target file not found: {target}"
+
+        content = patch.patch_content
+        if self._is_unified_diff(content):
+            return self._preview_diff(target_path, content)
+        else:
+            return self._preview_replacement(target_path, content)
+
+    def _preview_diff(self, target_path: Path, diff_content: str) -> str:
+        """Preview a unified diff: count additions and deletions."""
+        lines = diff_content.splitlines()
+        added = sum(1 for l in lines if l.startswith("+") and not l.startswith("+++"))
+        removed = sum(1 for l in lines if l.startswith("-") and not l.startswith("---"))
+        hunks = sum(1 for l in lines if l.startswith("@@"))
+
+        summary = [
+            f"[dry-run] Patch preview for: {target_path}",
+            f"  +{added} lines added, -{removed} lines removed, {hunks} hunk(s)",
+        ]
+        # Show first 8 changed lines as preview
+        changed = [l for l in lines if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))][:8]
+        for line in changed:
+            summary.append(f"  {line}")
+        if len(changed) < added + removed:
+            summary.append(f"  ... ({added + removed - len(changed)} more lines)")
+        return "\n".join(summary)
+
+    def _preview_replacement(self, target_path: Path, new_content: str) -> str:
+        """Preview a full-file replacement."""
+        original = target_path.read_text(encoding="utf-8")
+        code = self._extract_code(new_content)
+        orig_lines = len(original.splitlines())
+        new_lines = len(code.splitlines())
+        diff = new_lines - orig_lines
+        return (
+            f"[dry-run] Full replacement preview for: {target_path}\n"
+            f"  Original: {orig_lines} lines → New: {new_lines} lines ({diff:+d})"
+        )
+
+    # --- Persistent backup index ---
+
+    def _load_backup_index(self) -> None:
+        """Load the persistent backup index from disk."""
+        index_path = Path(BACKUP_INDEX_FILE)
+        if index_path.exists():
+            try:
+                with open(index_path, encoding="utf-8") as f:
+                    self._applied_patches = json.load(f)
+                logger.debug(
+                    "Loaded %d entries from backup index", len(self._applied_patches)
+                )
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Failed to load backup index: %s", e)
+
+    def _save_backup_index(self) -> None:
+        """Persist the current backup index to disk."""
+        try:
+            index_path = Path(BACKUP_INDEX_FILE)
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(index_path, "w", encoding="utf-8") as f:
+                json.dump(self._applied_patches, f, indent=2)
+        except OSError as e:
+            logger.warning("Failed to save backup index: %s", e)
+
+    def list_backups(self) -> dict[str, dict]:
+        """List all tracked backups with metadata.
+
+        Returns a dict mapping patch_id to {backup_path, target_file, exists}.
+        """
+        result = {}
+        for patch_id, backup_path in self._applied_patches.items():
+            bp = Path(backup_path)
+            # Derive target file from backup name (strip timestamp + uuid)
+            # Backup format: {filename}.{YYYYMMDD_HHMMSS}_{uuid8}.bak
+            stem = bp.stem  # e.g., "test_utils.py.20260502_120000_a1b2c3d4"
+            parts = stem.rsplit(".", 2)
+            target_name = parts[0] if len(parts) >= 3 else stem
+            result[patch_id] = {
+                "backup_path": backup_path,
+                "target_file": str(self.backup_dir.parent / target_name)
+                if self.backup_dir.parent != Path(".")
+                else target_name,
+                "exists": bp.exists(),
+                "size": bp.stat().st_size if bp.exists() else 0,
+                "created": datetime.fromtimestamp(bp.stat().st_mtime).isoformat()
+                if bp.exists() else "unknown",
+            }
+        return result
+
+    # --- Backup lifecycle management ---
+
+    def cleanup_backups(self, max_age_days: int = 30) -> dict:
+        """Remove backup files older than max_age_days and orphan files.
+
+        Returns a dict with cleanup statistics.
+        """
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        stats = {"removed_index_entries": 0, "removed_orphan_files": 0, "errors": 0}
+
+        # Remove expired entries from index
+        expired_ids = []
+        for patch_id, backup_path in list(self._applied_patches.items()):
+            bp = Path(backup_path)
+            if bp.exists():
+                mtime = datetime.fromtimestamp(bp.stat().st_mtime)
+                if mtime < cutoff:
+                    try:
+                        bp.unlink()
+                        expired_ids.append(patch_id)
+                        stats["removed_index_entries"] += 1
+                    except OSError:
+                        stats["errors"] += 1
+            else:
+                # Backup file missing — remove stale index entry
+                expired_ids.append(patch_id)
+                stats["removed_index_entries"] += 1
+
+        for pid in expired_ids:
+            del self._applied_patches[pid]
+
+        # Remove orphan backup files (not in index)
+        valid_paths = set(self._applied_patches.values())
+        for f in self.backup_dir.glob("*.bak"):
+            if str(f) not in valid_paths:
+                try:
+                    f.unlink()
+                    stats["removed_orphan_files"] += 1
+                except OSError:
+                    stats["errors"] += 1
+
+        self._save_backup_index()
+        logger.info(
+            "Backup cleanup: removed %d expired + %d orphans (%d errors)",
+            stats["removed_index_entries"],
+            stats["removed_orphan_files"],
+            stats["errors"],
+        )
+        return stats

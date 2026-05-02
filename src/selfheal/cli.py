@@ -286,8 +286,9 @@ def report(ctx: click.Context, config: Optional[str], reporter_type: str, input_
 @click.option("--config", type=click.Path(exists=True), help="Path to config file")
 @click.option("--input", "input_file", type=click.Path(exists=True), required=True, help="JSON file with array of failure events")
 @click.option("--auto-apply", is_flag=True, help="Automatically apply generated patches")
+@click.option("--dry-run", is_flag=True, help="Preview patches without modifying any files")
 @click.pass_context
-def batch(ctx: click.Context, config: Optional[str], input_file: str, auto_apply: bool) -> None:
+def batch(ctx: click.Context, config: Optional[str], input_file: str, auto_apply: bool, dry_run: bool) -> None:
     """Process multiple test failures in batch."""
     import json
     from selfheal.events import TestFailureEvent
@@ -300,6 +301,10 @@ def batch(ctx: click.Context, config: Optional[str], input_file: str, auto_apply
     if auto_apply:
         cfg.engine.auto_apply = True
         click.echo("⚠️  Auto-apply mode ENABLED")
+
+    if dry_run:
+        cfg.engine.dry_run = True
+        click.echo("[DRY-RUN] Patches will be previewed but NOT applied")
 
     # Load failures from JSON
     with open(input_file) as f:
@@ -330,6 +335,167 @@ def batch(ctx: click.Context, config: Optional[str], input_file: str, auto_apply
     click.echo(f"\nBatch complete: {passed} passed, {failed} failed, {len(results)} total")
     click.echo(engine.get_metrics_report())
     engine.shutdown()
+
+
+@main.command()
+@click.option("--config", type=click.Path(exists=True), help="Path to config file")
+@click.option("--patch-id", default=None, help="Rollback a specific patch (default: list available)")
+@click.option("--all", "rollback_all", is_flag=True, help="Rollback all tracked patches")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def rollback(ctx: click.Context, config: Optional[str], patch_id: Optional[str], rollback_all: bool, force: bool) -> None:
+    """Rollback applied patches from backup files.
+
+    Without --patch-id or --all, lists all tracked backups.
+    """
+    from selfheal.core.applier import PatchApplier
+
+    if config:
+        cfg = Config.from_file(Path(config))
+    else:
+        cfg = Config.load_default()
+
+    applier = PatchApplier(cfg.engine)
+    backups = applier.list_backups()
+
+    if not backups:
+        click.echo("No tracked backups found. Nothing to rollback.")
+        return
+
+    # List mode
+    if not patch_id and not rollback_all:
+        click.echo(f"Found {len(backups)} tracked backup(s):\n")
+        for pid, info in backups.items():
+            status = "[OK]" if info["exists"] else "[MISSING]"
+            click.echo(
+                f"  {pid[:12]}...  {status}"
+                f"\n    target: {info['target_file']}"
+                f"\n    backup: {info['backup_path']}"
+                f"\n    size: {info['size']} bytes, created: {info['created']}\n"
+            )
+        click.echo("Use --patch-id <ID> to rollback one, or --all to rollback all.")
+        return
+
+    # Rollback all
+    if rollback_all:
+        if not force:
+            click.echo(f"WARNING: About to rollback {len(backups)} patch(es).")
+            click.confirm("Continue?", abort=True)
+
+        rolled = 0
+        for pid, info in backups.items():
+            if not info["exists"]:
+                click.echo(f"  Skip {pid[:12]}: backup file missing")
+                continue
+            # Create a minimal PatchEvent for rollback
+            patch = _make_rollback_patch(pid, info)
+            if applier.rollback(patch):
+                click.echo(f"  [OK] Rolled back: {info['target_file']}")
+                rolled += 1
+            else:
+                click.echo(f"  [FAIL] Failed: {info['target_file']}")
+        click.echo(f"\nRollback complete: {rolled}/{len(backups)} succeeded")
+        return
+
+    # Rollback one
+    if patch_id:
+        # Find by prefix match
+        matched = {pid: info for pid, info in backups.items() if pid.startswith(patch_id)}
+        if not matched:
+            click.echo(f"No backup found for patch ID starting with: {patch_id}")
+            return
+        if len(matched) > 1:
+            click.echo(f"Ambiguous patch ID. Matches: {list(matched.keys())}")
+            return
+
+        pid, info = next(iter(matched.items()))
+        if not info["exists"]:
+            click.echo(f"Backup file missing for {pid[:12]}")
+            return
+
+        patch = _make_rollback_patch(pid, info)
+        if applier.rollback(patch):
+            click.echo(f"[OK] Rolled back: {info['target_file']}")
+        else:
+            click.echo(f"[FAIL] Rollback failed for: {info['target_file']}")
+
+
+def _make_rollback_patch(patch_id: str, info: dict):
+    """Create a minimal PatchEvent for rollback operations."""
+    from selfheal.events import PatchEvent, ClassificationEvent, ErrorSeverity, TestFailureEvent
+    dummy_event = TestFailureEvent(
+        test_path=info["target_file"],
+        error_type="rolled_back",
+        error_message="Manual rollback",
+    )
+    dummy_classification = ClassificationEvent(
+        original_event=dummy_event,
+        category="unknown",
+        severity=ErrorSeverity.MEDIUM,
+        confidence=0.0,
+    )
+    return PatchEvent(
+        classification_event=dummy_classification,
+        patch_id=patch_id,
+        patch_content="",
+        generator="rollback",
+        target_file=info["target_file"],
+        backup_path=info["backup_path"],
+    )
+
+
+@main.command()
+@click.option("--config", type=click.Path(exists=True), help="Path to config file")
+@click.pass_context
+def backups(ctx: click.Context, config: Optional[str]) -> None:
+    """List all tracked backup files."""
+    from selfheal.core.applier import PatchApplier
+
+    if config:
+        cfg = Config.from_file(Path(config))
+    else:
+        cfg = Config.load_default()
+
+    applier = PatchApplier(cfg.engine)
+    backups = applier.list_backups()
+
+    if not backups:
+        click.echo("No tracked backups found.")
+        return
+
+    click.echo(f"Tracked backups ({len(backups)}):\n")
+    for pid, info in backups.items():
+        status = "exists" if info["exists"] else "missing"
+        click.echo(f"  [{status}] {pid[:12]}... → {info['target_file']}")
+
+
+@main.command()
+@click.option("--config", type=click.Path(exists=True), help="Path to config file")
+@click.option("--max-age", default=30, help="Remove backups older than N days (default: 30)")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def cleanup(ctx: click.Context, config: Optional[str], max_age: int, force: bool) -> None:
+    """Remove old backup files and orphan backups."""
+    from selfheal.core.applier import PatchApplier
+
+    if config:
+        cfg = Config.from_file(Path(config))
+    else:
+        cfg = Config.load_default()
+
+    applier = PatchApplier(cfg.engine)
+
+    if not force:
+        click.echo(f"WARNING: This will remove backups older than {max_age} days and orphan files.")
+        click.confirm("Continue?", abort=True)
+
+    stats = applier.cleanup_backups(max_age_days=max_age)
+    click.echo(
+        f"Cleanup complete:\n"
+        f"  Removed expired: {stats['removed_index_entries']}\n"
+        f"  Removed orphans: {stats['removed_orphan_files']}\n"
+        f"  Errors: {stats['errors']}"
+    )
 
 
 @main.command()

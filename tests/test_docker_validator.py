@@ -83,7 +83,7 @@ class TestDockerValidator:
 
     @patch.object(DockerValidator, "_get_client")
     def test_validate_passed(self, mock_get_client, docker_config, sample_patch):
-        """validate() returns 'passed' when container exits 0."""
+        """validate() returns 'passed' when container exits 0 (direct mode)."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -94,6 +94,8 @@ class TestDockerValidator:
         )
         mock_client.containers.run.return_value = mock_container
 
+        # Use direct mode (sandbox=False) to test container lifecycle
+        docker_config.docker.sandbox = False
         validator = DockerValidator(docker_config)
         result = validator.validate(sample_patch)
 
@@ -101,7 +103,7 @@ class TestDockerValidator:
         assert "PASSED" in result.test_output
         assert result.duration > 0
 
-        # Verify container was cleaned up
+        # Verify container was cleaned up (direct mode calls remove in finally)
         mock_container.remove.assert_called_once_with(force=True)
 
         # Verify correct image and command were used
@@ -112,7 +114,7 @@ class TestDockerValidator:
 
     @patch.object(DockerValidator, "_get_client")
     def test_validate_failed(self, mock_get_client, docker_config, sample_patch):
-        """validate() returns 'failed' when container exits non-zero."""
+        """validate() returns 'failed' when container exits non-zero (direct mode)."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -124,6 +126,7 @@ class TestDockerValidator:
         )
         mock_client.containers.run.return_value = mock_container
 
+        docker_config.docker.sandbox = False
         validator = DockerValidator(docker_config)
         result = validator.validate(sample_patch)
 
@@ -134,7 +137,7 @@ class TestDockerValidator:
 
     @patch.object(DockerValidator, "_get_client")
     def test_validate_timeout(self, mock_get_client, docker_config, sample_patch):
-        """validate() returns 'error' when container wait times out."""
+        """validate() returns 'error' when container wait times out (direct mode)."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -142,6 +145,7 @@ class TestDockerValidator:
         mock_container.wait.side_effect = Exception("Read timed out")
         mock_client.containers.run.return_value = mock_container
 
+        docker_config.docker.sandbox = False
         validator = DockerValidator(docker_config)
         result = validator.validate(sample_patch)
 
@@ -170,7 +174,7 @@ class TestDockerValidator:
     def test_validate_container_remove_error(
         self, mock_get_client, docker_config, sample_patch
     ):
-        """Cleanup failure does not mask the validation result."""
+        """Cleanup failure does not mask the validation result (direct mode)."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
@@ -180,6 +184,7 @@ class TestDockerValidator:
         mock_container.remove.side_effect = Exception("Cannot remove")
         mock_client.containers.run.return_value = mock_container
 
+        docker_config.docker.sandbox = False
         validator = DockerValidator(docker_config)
         result = validator.validate(sample_patch)
 

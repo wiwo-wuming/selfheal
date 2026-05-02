@@ -109,6 +109,7 @@ class DockerConfig(BaseModel):
     image: str = "python:3.11-slim"
     timeout: int = 600
     network: Optional[str] = None
+    sandbox: bool = True  # if True, validate in temp copy (safe); if False, mount host dir RW (fast)
 
 
 class GitHubConfig(BaseModel):
@@ -300,6 +301,7 @@ class EngineConfig(BaseModel):
     max_retries: int = 3
     retry_delay: float = 1.0  # seconds between retries
     auto_apply: bool = False  # if False, patches are generated but not applied
+    dry_run: bool = False  # if True, preview patches without modifying files
     backup_dir: str = ".selfheal/backups"
     strategy_fallback: bool = True  # try alternative patcher on failure
     experience_enabled: bool = True  # record & reuse successful fixes from experience store
