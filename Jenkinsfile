@@ -90,7 +90,9 @@ pipeline {
                         returnStatus: true
                     )
                     env.POSTFIX_FAILED = (status != 0) ? '1' : '0'
-                    if (status != 0) {
+                    if (status == 0) {
+                        currentBuild.result = 'SUCCESS'
+                    } else {
                         currentBuild.result = 'FAILURE'
                     }
                 }

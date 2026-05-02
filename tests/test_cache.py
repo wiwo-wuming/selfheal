@@ -7,8 +7,8 @@ from selfheal.core.cache import (
     LLMResponseCache,
     get_cache,
     reset_cache,
-    _make_error_signature,
 )
+from selfheal.core.utils import make_error_signature
 from selfheal.events import TestFailureEvent
 
 
@@ -29,30 +29,30 @@ class TestErrorSignature:
         """Identical errors produce identical cache keys."""
         e1 = make_event("AssertionError", "assert 1 == 2")
         e2 = make_event("AssertionError", "assert 1 == 2")
-        assert _make_error_signature(e1) == _make_error_signature(e2)
+        assert make_error_signature(e1) == make_error_signature(e2)
 
     def test_different_error_type_different_signature(self):
         """Different error types produce different keys."""
         e1 = make_event("AssertionError")
         e2 = make_event("ImportError")
-        assert _make_error_signature(e1) != _make_error_signature(e2)
+        assert make_error_signature(e1) != make_error_signature(e2)
 
     def test_signature_starts_with_error_type(self):
         """Signature is human-readable, starts with error type."""
-        sig = _make_error_signature(make_event("ValueError", "bad value"))
+        sig = make_error_signature(make_event("ValueError", "bad value"))
         assert sig.startswith("ValueError:")
 
     def test_different_message_different_signature(self):
         """Different error messages produce different keys."""
         e1 = make_event("RuntimeError", "msg A")
         e2 = make_event("RuntimeError", "msg B")
-        assert _make_error_signature(e1) != _make_error_signature(e2)
+        assert make_error_signature(e1) != make_error_signature(e2)
 
     def test_different_traceback_different_signature(self):
         """Different tracebacks produce different keys."""
         e1 = make_event("RuntimeError", "msg", 'File "a.py", line 1\nError')
         e2 = make_event("RuntimeError", "msg", 'File "b.py", line 99\nError')
-        assert _make_error_signature(e1) != _make_error_signature(e2)
+        assert make_error_signature(e1) != make_error_signature(e2)
 
 
 class TestLLMResponseCache:

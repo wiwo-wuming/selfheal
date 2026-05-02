@@ -7,6 +7,7 @@ and category distributions.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from datetime import datetime
@@ -251,55 +252,14 @@ if (categoryData && categoryData.labels && categoryData.labels.length > 0) {
 def _load_experience_data() -> dict[str, Any]:
     """Load statistics from the experience store."""
     experience = get_experience()
-    conn = experience._get_conn()
-
-    total = conn.execute("SELECT COUNT(*) FROM experiences").fetchone()[0]
-    unique = conn.execute(
-        "SELECT COUNT(DISTINCT signature) FROM experiences"
-    ).fetchone()[0]
-    total_successes = conn.execute(
-        "SELECT COALESCE(SUM(success_count), 0) FROM experiences"
-    ).fetchone()[0]
-
-    top_categories = conn.execute(
-        "SELECT category, COUNT(*) as cnt FROM experiences "
-        "GROUP BY category ORDER BY cnt DESC LIMIT 10"
-    ).fetchall()
-
-    top_error_types = conn.execute(
-        "SELECT error_type, COUNT(*) as cnt FROM experiences "
-        "GROUP BY error_type ORDER BY cnt DESC LIMIT 10"
-    ).fetchall()
-
-    recent = conn.execute(
-        "SELECT * FROM experiences ORDER BY last_used DESC LIMIT 20"
-    ).fetchall()
-
-    # Load metrics history for trend chart
-    trend = experience.get_metrics_history(days=30)
-
-    # Build category breakdown for doughnut chart from latest snapshot
-    category_breakdown = {}
-    if trend:
-        category_breakdown = trend[-1].get("category_breakdown", {})
-
-    return {
-        "total_experiences": total,
-        "unique_signatures": unique,
-        "total_successes": total_successes,
-        "top_categories": [(r["category"], r["cnt"]) for r in top_categories],
-        "top_error_types": [(r["error_type"], r["cnt"]) for r in top_error_types],
-        "recent_fixes": [dict(r) for r in recent],
-        "trend": trend,
-        "category_breakdown": category_breakdown,
-    }
+    return experience.dashboard_data()
 
 
 def _render_top_categories(categories: list[tuple[str, int]]) -> str:
     if not categories:
         return "<tr><td colspan='2' style='color:#8b949e'>No data yet</td></tr>"
     return "\n      ".join(
-        f"<tr><td>{cat}</td><td><span class='badge blue'>{cnt}</span></td></tr>"
+        f"<tr><td>{html.escape(cat)}</td><td><span class='badge blue'>{cnt}</span></td></tr>"
         for cat, cnt in categories
     )
 
@@ -308,7 +268,7 @@ def _render_top_error_types(error_types: list[tuple[str, int]]) -> str:
     if not error_types:
         return "<tr><td colspan='2' style='color:#8b949e'>No data yet</td></tr>"
     return "\n      ".join(
-        f"<tr><td>{et}</td><td><span class='badge blue'>{cnt}</span></td></tr>"
+        f"<tr><td>{html.escape(et)}</td><td><span class='badge blue'>{cnt}</span></td></tr>"
         for et, cnt in error_types
     )
 
@@ -325,8 +285,8 @@ def _render_recent_fixes(recent: list[dict[str, Any]]) -> str:
         lu = entry.get("last_used", "?")
         rows.append(
             f"<tr><td style='max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'"
-            f" title='{sig}'>{sig[:40]}</td>"
-            f"<td>{cat}</td><td>{gen}</td><td>{sc}</td><td>{lu}</td></tr>"
+            f" title='{html.escape(sig)}'>{html.escape(sig[:40])}</td>"
+            f"<td>{html.escape(cat)}</td><td>{html.escape(gen)}</td><td>{sc}</td><td>{lu}</td></tr>"
         )
     return "\n      ".join(rows)
 

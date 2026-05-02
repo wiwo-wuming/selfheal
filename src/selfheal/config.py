@@ -13,9 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_env(value: str) -> str:
-    """Resolve ${ENV_VAR} references in config values."""
-    pattern = re.compile(r"\$\{([^}]+)\}")
-    return pattern.sub(lambda m: os.environ.get(m.group(1), "").strip(), value)
+    """Resolve ${ENV_VAR} and ${ENV_VAR:-default} references in config values."""
+    # Match ${VAR} or ${VAR:-default}
+    pattern = re.compile(r"\$\{([^}:-]+)(?::-([^}]*))?\}")
+    def _replacer(m: re.Match) -> str:
+        name = m.group(1)
+        default = m.group(2) if m.group(2) is not None else ""
+        return os.environ.get(name, default).strip()
+    return pattern.sub(_replacer, value)
 
 
 class RuleConfig(BaseModel):
@@ -87,6 +92,14 @@ class LLMConfig(BaseModel):
         if v and isinstance(v, str):
             return v.strip()
         return v
+
+    def __repr__(self) -> str:
+        """Safe repr that masks API key values."""
+        return (
+            f"LLMConfig(provider={self.provider!r}, model={self.model!r}, "
+            f"api_key={'***' if self.api_key else None}, "
+            f"base_url={self.base_url!r}, temperature={self.temperature})"
+        )
 
     def get_api_key(self) -> Optional[str]:
         """Return the effective API key for the configured provider.
@@ -357,10 +370,10 @@ class Config(BaseModel):
     @classmethod
     def load_default(cls) -> "Config":
         """Load configuration from default locations."""
-        # Check common locations
+        cwd = Path.cwd()
         locations = [
-            Path.cwd() / "selfheal.yaml",
-            Path.cwd() / ".selfheal.yaml",
+            cwd / "selfheal.yaml",
+            cwd / ".selfheal.yaml",
             Path.home() / ".selfheal.yaml",
         ]
 

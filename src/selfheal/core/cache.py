@@ -2,36 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
 from typing import Any, Optional
 
+from selfheal.core.utils import make_error_signature
 from selfheal.events import TestFailureEvent
 
 logger = logging.getLogger(__name__)
 
 # Default TTL: 1 hour — same error within an hour reuses cached result
 DEFAULT_CACHE_TTL = 3600
-
-
-def _make_error_signature(event: TestFailureEvent) -> str:
-    """Generate a stable hash key from an error event.
-
-    Uses error_type + first meaningful traceback line for uniqueness.
-    Human-readable prefix helps debugging.
-    """
-    tb_first_line = ""
-    for line in event.traceback.splitlines():
-        line = line.strip()
-        if line.startswith("File ") or "Error" in line:
-            tb_first_line = line
-            break
-
-    raw = f"{event.error_type}|{event.error_message[:200]}|{tb_first_line[:200]}"
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-    return f"{event.error_type}:{digest}"
 
 
 class LLMResponseCache:
@@ -57,7 +39,7 @@ class LLMResponseCache:
     @staticmethod
     def make_key(event: TestFailureEvent) -> str:
         """Generate a cache key for a failure event."""
-        return _make_error_signature(event)
+        return make_error_signature(event)
 
     def get(self, key: str) -> Optional[dict[str, Any]]:
         """Retrieve a cached response if not expired."""

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import shutil
 import uuid
 from datetime import datetime, timedelta
@@ -12,6 +13,9 @@ from selfheal.config import EngineConfig
 from selfheal.events import PatchEvent
 
 logger = logging.getLogger(__name__)
+
+# Number of initial lines to inspect for unified-diff format detection
+_DIFF_DETECT_LINES = 20
 
 BACKUP_INDEX_FILE = ".selfheal/backup_index.json"
 
@@ -138,7 +142,7 @@ class PatchApplier:
         lines = content.strip().split("\n")
         return any(
             line.startswith(("--- ", "+++ ", "@@ ", "diff --git"))
-            for line in lines[:20]
+            for line in lines[:_DIFF_DETECT_LINES]
         )
 
     def _apply_diff(self, target_path: Path, diff_content: str) -> bool:
@@ -172,7 +176,6 @@ class PatchApplier:
         diff_lines = diff_content.splitlines(keepends=True)
 
         # Find hunks starting with @@ -a,b +c,d @@
-        import re
         hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
         result = list(original_lines)  # copy
@@ -296,7 +299,6 @@ class PatchApplier:
     @staticmethod
     def _extract_code(content: str) -> str:
         """Extract code from patch content, removing markdown fences."""
-        import re
 
         # Try to extract from code blocks
         code_blocks = re.findall(r"```(?:python|py|diff)?\n(.*?)```", content, re.DOTALL)
@@ -408,12 +410,15 @@ class PatchApplier:
             # Backup format: {filename}.{YYYYMMDD_HHMMSS}_{uuid8}.bak
             stem = bp.stem  # e.g., "test_utils.py.20260502_120000_a1b2c3d4"
             parts = stem.rsplit(".", 2)
-            target_name = parts[0] if len(parts) >= 3 else stem
+            if len(parts) >= 3:
+                target_name = ".".join(parts[:-1])  # preserves: "test_utils.py"
+            else:
+                target_name = stem
+            # Reconstruct original path:
+            # bp is .selfheal/backups/<file>.bak, so bp.parent.parent.parent is project root
             result[patch_id] = {
                 "backup_path": backup_path,
-                "target_file": str(self.backup_dir.parent / target_name)
-                if self.backup_dir.parent != Path(".")
-                else target_name,
+                "target_file": str(bp.parent.parent.parent / target_name),
                 "exists": bp.exists(),
                 "size": bp.stat().st_size if bp.exists() else 0,
                 "created": datetime.fromtimestamp(bp.stat().st_mtime).isoformat()

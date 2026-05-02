@@ -26,8 +26,8 @@ class ClassifyStage(PipelineStage):
             classification.category, classification.severity.value
         )
         logger.info(
-            f"Classified: {classification.category} "
-            f"(confidence: {classification.confidence:.2f})"
+            "Classified: %s (confidence: %.2f)",
+            classification.category, classification.confidence
         )
 
         context["classification"] = classification

@@ -7,34 +7,24 @@ success count and recency.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+from selfheal.core.utils import make_error_signature
 from selfheal.events import TestFailureEvent, ClassificationEvent, PatchEvent, ValidationEvent
+
+# Truncation length for error messages stored in the experience DB
+_ERROR_MSG_MAX_LEN = 500
 
 logger = logging.getLogger(__name__)
 
 # Same key derivation as cache.py for consistency
 _EXPERIENCE_DB_NAME = ".selfheal/experience.db"
-
-
-def _make_error_signature(event: TestFailureEvent) -> str:
-    """Generate a stable hash key from an error event."""
-    tb_first_line = ""
-    for line in event.traceback.splitlines():
-        line = line.strip()
-        if line.startswith("File ") or "Error" in line:
-            tb_first_line = line
-            break
-    raw = f"{event.error_type}|{event.error_message[:200]}|{tb_first_line[:200]}"
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-    return f"{event.error_type}:{digest}"
 
 
 class ExperienceStore:
@@ -117,6 +107,8 @@ class ExperienceStore:
         if self._conn is None:
             self._conn = sqlite3.connect(str(self.db_path))
             self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
         return self._conn
 
     # ------------------------------------------------------------------
@@ -134,7 +126,7 @@ class ExperienceStore:
         If an identical (signature + patch_content) entry already exists,
         increment its success_count instead of inserting a duplicate.
         """
-        signature = _make_error_signature(event)
+        signature = make_error_signature(event)
         conn = self._get_conn()
 
         # Check for identical existing entry
@@ -164,7 +156,7 @@ class ExperienceStore:
                 signature,
                 classification.category,
                 event.error_type,
-                event.error_message[:500],
+                event.error_message[:_ERROR_MSG_MAX_LEN],
                 patch.patch_content,
                 patch.generator,
             ),
@@ -191,7 +183,7 @@ class ExperienceStore:
 
         Results are ordered by success_count DESC, last_used DESC.
         """
-        signature = _make_error_signature(event)
+        signature = make_error_signature(event)
         conn = self._get_conn()
         results: list[dict[str, Any]] = []
 
@@ -256,13 +248,63 @@ class ExperienceStore:
             ).fetchone()[0],
         }
 
+    def dashboard_data(self) -> dict[str, Any]:
+        """Return detailed data for the HTML dashboard.
+
+        Provides all query results that the dashboard generator needs,
+        so it doesn't have to access the private ``_get_conn()`` method.
+        """
+        conn = self._get_conn()
+
+        total = conn.execute("SELECT COUNT(*) FROM experiences").fetchone()[0]
+        unique = conn.execute(
+            "SELECT COUNT(DISTINCT signature) FROM experiences"
+        ).fetchone()[0]
+        total_successes = conn.execute(
+            "SELECT COALESCE(SUM(success_count), 0) FROM experiences"
+        ).fetchone()[0]
+
+        top_categories = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM experiences "
+            "GROUP BY category ORDER BY cnt DESC LIMIT 10"
+        ).fetchall()
+
+        top_error_types = conn.execute(
+            "SELECT error_type, COUNT(*) as cnt FROM experiences "
+            "GROUP BY error_type ORDER BY cnt DESC LIMIT 10"
+        ).fetchall()
+
+        recent = conn.execute(
+            "SELECT * FROM experiences ORDER BY last_used DESC LIMIT 20"
+        ).fetchall()
+
+        # Load metrics history for trend chart
+        trend = self.get_metrics_history(days=30)
+
+        # Build category breakdown for doughnut chart from latest snapshot
+        category_breakdown = {}
+        if trend:
+            category_breakdown = trend[-1].get("category_breakdown", {})
+
+        return {
+            "total_experiences": total,
+            "unique_signatures": unique,
+            "total_successes": total_successes,
+            "top_categories": [(r["category"], r["cnt"]) for r in top_categories],
+            "top_error_types": [(r["error_type"], r["cnt"]) for r in top_error_types],
+            "recent_fixes": [dict(r) for r in recent],
+            "trend": trend,
+            "category_breakdown": category_breakdown,
+        }
+
     def prune(self, max_age_days: int = 90, min_success_count: int = 1) -> int:
         """Remove old or rarely-successful entries. Returns count removed."""
+        cutoff = (datetime.now() - timedelta(days=max_age_days)).isoformat()[:10]
         conn = self._get_conn()
         cursor = conn.execute(
             "DELETE FROM experiences WHERE "
             "last_used < ? OR success_count < ?",
-            (datetime.now().isoformat()[:10], min_success_count),
+            (cutoff, min_success_count),
         )
         conn.commit()
         removed = cursor.rowcount

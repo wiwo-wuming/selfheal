@@ -204,9 +204,20 @@ class PluginLoader:
         if not file_path.suffix == ".py" or file_path.name.startswith("_"):
             return False
 
+        # Security: prevent path traversal (e.g., ../../etc/passwd.py)
+        resolved_file = file_path.resolve()
+        resolved_base = base_dir.resolve()
+        try:
+            resolved_file.relative_to(resolved_base)
+        except ValueError:
+            logger.warning(
+                "Plugin file outside base directory, skipping: %s", file_path
+            )
+            return False
+
         try:
             # Derive module name: path relative to base_dir, strip .py suffix
-            rel = file_path.relative_to(base_dir)
+            rel = resolved_file.relative_to(resolved_base)
             module_name = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
 
             base_str = str(base_dir.resolve())

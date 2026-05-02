@@ -100,8 +100,15 @@ class ValidateStage(PipelineStage):
             # Handle classification as either dict or ClassificationEvent
             if isinstance(classification, dict):
                 cat = classification.get("category", "unknown")
+                severity = classification.get("severity", ErrorSeverity.MEDIUM)
+                # Ensure severity is an ErrorSeverity enum
+                if isinstance(severity, str):
+                    severity = ErrorSeverity(severity)
+                confidence = classification.get("confidence", 0.0)
             else:
                 cat = classification.category
+                severity = classification.severity
+                confidence = classification.confidence
 
             experience = get_experience()
             experience.record_success(
@@ -109,8 +116,8 @@ class ValidateStage(PipelineStage):
                 classification=ClassificationEvent(
                     original_event=event,
                     category=cat,
-                    severity=ErrorSeverity.MEDIUM,
-                    confidence=0.0,
+                    severity=severity,
+                    confidence=confidence,
                 ) if isinstance(classification, dict) else classification,
                 patch=validation.patch_event,
             )

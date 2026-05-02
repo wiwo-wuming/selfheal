@@ -1,14 +1,44 @@
 """CLI interface for SelfHeal."""
 
+import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
 from selfheal import __version__
 from selfheal.config import Config
 from selfheal.engine import SelfHealEngine
+from selfheal.events import (
+    ClassificationEvent,
+    ErrorSeverity,
+    PatchEvent,
+    TestFailureEvent,
+    ValidationEvent,
+)
+
+
+def _reconstruct_failure_event(data: dict[str, Any]) -> TestFailureEvent:
+    """Reconstruct a TestFailureEvent from a serialised dict."""
+    return TestFailureEvent(
+        test_path=data["test_path"],
+        error_type=data["error_type"],
+        error_message=data["error_message"],
+        traceback=data.get("traceback", ""),
+    )
+
+
+def _reconstruct_classification_event(data: dict[str, Any]) -> ClassificationEvent:
+    """Reconstruct a ClassificationEvent from a serialised dict."""
+    original = _reconstruct_failure_event(data["original_event"])
+    return ClassificationEvent(
+        original_event=original,
+        category=data["category"],
+        severity=ErrorSeverity(data["severity"]),
+        confidence=data["confidence"],
+        reasoning=data.get("reasoning", ""),
+    )
 
 
 @click.group()
@@ -101,8 +131,6 @@ def classify(ctx: click.Context, config: Optional[str], classifier_type: str, in
 @click.pass_context
 def patch(ctx: click.Context, config: Optional[str], patcher_type: str, input_file: str) -> None:
     """Generate a patch for a failure."""
-    import json
-    from selfheal.events import ClassificationEvent, ErrorSeverity, TestFailureEvent
     from selfheal.registry import get_registry
 
     if config:
@@ -114,14 +142,7 @@ def patch(ctx: click.Context, config: Optional[str], patcher_type: str, input_fi
     with open(input_file) as f:
         data = json.load(f)
 
-    original_data = data["original_event"]
-    original_event = TestFailureEvent(
-        test_path=original_data["test_path"],
-        error_type=original_data["error_type"],
-        error_message=original_data["error_message"],
-        traceback=original_data.get("traceback", ""),
-    )
-
+    original_event = _reconstruct_failure_event(data["original_event"])
     classification = ClassificationEvent(
         original_event=original_event,
         category=data["category"],
@@ -152,13 +173,6 @@ def patch(ctx: click.Context, config: Optional[str], patcher_type: str, input_fi
 @click.pass_context
 def validate(ctx: click.Context, config: Optional[str], validator_type: str, input_file: str) -> None:
     """Validate a patch."""
-    import json
-    from selfheal.events import (
-        ClassificationEvent,
-        ErrorSeverity,
-        PatchEvent,
-        TestFailureEvent,
-    )
     from selfheal.registry import get_registry
 
     if config:
@@ -172,20 +186,7 @@ def validate(ctx: click.Context, config: Optional[str], validator_type: str, inp
 
     # Reconstruct PatchEvent from JSON
     classification_data = data["classification_event"]
-    original_data = classification_data["original_event"]
-    original = TestFailureEvent(
-        test_path=original_data["test_path"],
-        error_type=original_data["error_type"],
-        error_message=original_data["error_message"],
-        traceback=original_data.get("traceback", ""),
-    )
-    classification = ClassificationEvent(
-        original_event=original,
-        category=classification_data["category"],
-        severity=ErrorSeverity(classification_data["severity"]),
-        confidence=classification_data["confidence"],
-        reasoning=classification_data.get("reasoning", ""),
-    )
+    classification = _reconstruct_classification_event(classification_data)
     patch = PatchEvent(
         classification_event=classification,
         patch_id=data["patch_id"],
@@ -218,15 +219,7 @@ def validate(ctx: click.Context, config: Optional[str], validator_type: str, inp
 @click.pass_context
 def report(ctx: click.Context, config: Optional[str], reporter_type: str, input_file: str) -> None:
     """Generate a report from a validation event."""
-    import json
     from datetime import datetime
-    from selfheal.events import (
-        ClassificationEvent,
-        ErrorSeverity,
-        PatchEvent,
-        TestFailureEvent,
-        ValidationEvent,
-    )
     from selfheal.registry import get_registry
 
     if config:
@@ -241,21 +234,7 @@ def report(ctx: click.Context, config: Optional[str], reporter_type: str, input_
     # Reconstruct full event chain from JSON
     patch_data = data["patch_event"]
     classification_data = patch_data["classification_event"]
-    original_data = classification_data["original_event"]
-
-    original = TestFailureEvent(
-        test_path=original_data["test_path"],
-        error_type=original_data["error_type"],
-        error_message=original_data["error_message"],
-        traceback=original_data.get("traceback", ""),
-    )
-    classification = ClassificationEvent(
-        original_event=original,
-        category=classification_data["category"],
-        severity=ErrorSeverity(classification_data["severity"]),
-        confidence=classification_data["confidence"],
-        reasoning=classification_data.get("reasoning", ""),
-    )
+    classification = _reconstruct_classification_event(classification_data)
     patch = PatchEvent(
         classification_event=classification,
         patch_id=patch_data["patch_id"],
@@ -516,13 +495,19 @@ def metrics(ctx: click.Context, config: Optional[str], as_json: bool) -> None:
     collector = MetricsCollector()
 
     # Load historical events from the configured store to populate metrics
+    # Use aggregated queries when possible to avoid loading all events into memory
     try:
         registry = get_registry()
         store_cls = registry.get_store(cfg.store.type)
         if store_cls:
             store = store_cls(cfg.store)
             for event_type in ("failure", "classification", "patch", "validation"):
-                events = store.get_events(event_type, limit=1000)
+                events = store.get_events(event_type, limit=500)
+                if len(events) == 500:
+                    click.echo(
+                        f"Note: {event_type} data truncated at 500 entries "
+                        f"(use --json for larger datasets).", err=True
+                    )
                 for event in events:
                     if event_type == "failure":
                         collector.record_failure()

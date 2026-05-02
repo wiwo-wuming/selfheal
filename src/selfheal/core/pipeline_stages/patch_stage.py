@@ -85,6 +85,7 @@ class PatchStage(PipelineStage):
                         f"python -m selfheal apply {patch.patch_id} "
                         f"--target {patch.target_file}"
                     )
+                # Record the actual generation result, not the review state
                 engine.metrics.record_patch("generated")
                 all_patches.append(patch)
 

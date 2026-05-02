@@ -14,6 +14,10 @@ from selfheal.interfaces.patcher import PatcherInterface
 
 logger = logging.getLogger(__name__)
 
+# Limits for diff hunk processing
+_DIFF_PREVIEW_LINES = 20      # lines to inspect when checking if content is a diff
+_MAX_HUNK_LINES = 100         # safety cap for hunk line count during diff application
+
 # Regex to extract file/line/function from traceback lines like:
 #   File "/path/to/file.py", line 42, in test_foo
 _TRACEBACK_LOCATION_RE = re.compile(
@@ -174,6 +178,7 @@ class TemplatePatcher(PatcherInterface):
                 loader=FileSystemLoader(str(self._templates_dir)),
                 trim_blocks=True,
                 lstrip_blocks=True,
+                autoescape=True,
             )
         return self._env
 
@@ -371,8 +376,8 @@ class TemplatePatcher(PatcherInterface):
                 f"-{original_code}\n"
                 f"+# SelfHeal: skip test when offline\n"
                 f"+import pytest, socket\n"
-                f"+def _online():\\n"
-                f"+    try: socket.create_connection((\"8.8.8.8\", 53), timeout=3); return True\\n"
+                f"+def _online():\n"
+                f"+    try: socket.create_connection((\"8.8.8.8\", 53), timeout=3); return True\n"
                 f"+    except OSError: return False\n"
                 f"+@pytest.mark.skipif(not _online(), reason=\"network unavailable\")\n"
                 f"+def _wrapped(): pass  # (original logic goes here)\n"

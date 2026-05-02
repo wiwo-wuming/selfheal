@@ -144,16 +144,24 @@ class SelfHealEngine:
                 Path.cwd() / "src" / (source_name + ".py"),
             ]
             for candidate in candidates:
-                if candidate.exists():
+                try:
+                    with open(candidate, "rb", buffering=0):
+                        pass  # existence + readability check
                     return str(candidate)
+                except (OSError, FileNotFoundError):
+                    continue
 
         # Strategy 2: Try the test_path parent directory
         parent_dir = test_p.parent
         if parent_dir.exists():
             source_name = re.sub(r"^test_", "", test_p.stem)
             candidate = parent_dir / (source_name + ".py")
-            if candidate.exists():
+            try:
+                with open(candidate, "rb", buffering=0):
+                    pass
                 return str(candidate)
+            except (OSError, FileNotFoundError):
+                pass
 
         return None
 
@@ -314,9 +322,17 @@ class SelfHealEngine:
             self.config.engine.async_batch
             and self.config.engine.max_concurrency > 1
         ):
-            return asyncio.run(
-                self._async_process_batch(events)
-            )
+            try:
+                return asyncio.run(
+                    self._async_process_batch(events)
+                )
+            except RuntimeError:
+                # Already inside a running event loop (e.g. pytest-asyncio,
+                # Jupyter notebook). Fall back to sequential processing.
+                logger.warning(
+                    "Cannot use asyncio.run() inside existing event loop; "
+                    "falling back to sequential batch processing"
+                )
         return self._process_batch_sequential(events)
 
     def _process_batch_sequential(
@@ -484,9 +500,15 @@ class SelfHealEngine:
     def shutdown(self) -> None:
         """Shutdown the engine and cleanup resources."""
         for w in self._watchers:
-            w.stop()
+            try:
+                w.stop()
+            except Exception:
+                logger.exception("Error stopping watcher %s", type(w).__name__)
         self._plugin_watcher = None
-        self.store.close()
+        try:
+            self.store.close()
+        except Exception:
+            logger.exception("Error closing store")
         logger.info("Engine shutdown complete")
 
     def _should_skip_stage(self, stage: PipelineStage, context: dict) -> bool:

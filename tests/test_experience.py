@@ -10,8 +10,8 @@ from selfheal.core.experience import (
     ExperienceStore,
     get_experience,
     reset_experience,
-    _make_error_signature,
 )
+from selfheal.core.utils import make_error_signature
 from selfheal.events import (
     TestFailureEvent,
     ClassificationEvent,
