@@ -145,7 +145,7 @@ Respond with JSON:
         client = self._get_client()
         provider = self.llm_config.provider.lower()
 
-        if provider == "openai":
+        if provider in ("openai", "deepseek"):
             response = client.chat.completions.create(
                 model=self.llm_config.model,
                 messages=[{"role": "user", "content": prompt}],
