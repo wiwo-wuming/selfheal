@@ -1,0 +1,15 @@
+{# MemoryError fix – skip test when memory is insufficient #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 8 }} @@
+ {{ ' ' }}{{ original_code or '# (original memory-intensive code)' }}
++# SelfHeal: memory limit reached – test skipped to prevent OOM crashes
++import pytest
++
++
++@pytest.mark.skip(reason="MemoryError – test skipped to avoid out-of-memory crashes. "
++                          "Consider reducing input size or running on a larger instance.")
++def {{ error_func or 'test_memory' }}():
++    {{ original_code.strip() if original_code else '# (original memory-intensive logic)' }}

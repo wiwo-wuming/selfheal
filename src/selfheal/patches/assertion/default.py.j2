@@ -1,0 +1,13 @@
+{# AssertionError fix – wraps assertion with descriptive message #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 2 }} @@
+ {{ ' ' }}{{ original_code or '# (original assertion)' }}
++# SelfHeal: replaced bare assertion with descriptive message
++{% if expected and actual %}
++assert {{ actual }} == {{ expected }}, f"Expected { {{ expected }}!r }, but got { {{ actual }}!r }"
++{% else %}
++assert {{ original_code.strip().replace('assert ', '') if original_code.startswith('assert ') else 'condition' }}, f"Assertion failed: {{ error_message }}"
++{% endif %}

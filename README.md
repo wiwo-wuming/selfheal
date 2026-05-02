@@ -1,5 +1,7 @@
 # SelfHeal
 
+[![CI](https://github.com/wiwo-wuming/selfheal/actions/workflows/selfheal.yml/badge.svg)](https://github.com/wiwo-wuming/selfheal/actions/workflows/selfheal.yml)
+
 智能测试自愈框架 - 让测试用例能够自动检测问题、分类错误、生成修复并验证结果。
 
 ## 核心流程

@@ -120,9 +120,52 @@ class TemplatePatcher(PatcherInterface):
     def __init__(self, config: PatcherConfig):
         self.config = config
         self._env: Optional[Environment] = None
-        self._templates_dir = Path(config.templates_dir)
+        self._templates_dir = self._resolve_templates_dir(config.templates_dir)
 
     name = "template"
+
+    @staticmethod
+    def _resolve_templates_dir(configured_dir: str) -> Path:
+        """Resolve templates directory with intelligent fallback.
+
+        Strategy (in order):
+        1. Absolute path → use as-is.
+        2. Relative to CWD   → check if exists.
+        3. Relative to package → check src/selfheal/patches/.
+        4. Relative to project root → check selfheal/patches/ (dev install).
+        5. Fallback to the configured path (caller handles missing templates).
+        """
+        configured = Path(configured_dir)
+
+        # 1. Absolute path
+        if configured.is_absolute() and configured.exists():
+            logger.debug("Using absolute templates dir: %s", configured)
+            return configured
+
+        # 2. CWD-relative
+        cwd_path = (Path.cwd() / configured).resolve()
+        if cwd_path.exists():
+            logger.debug("Using CWD-relative templates dir: %s", cwd_path)
+            return cwd_path
+
+        # 3. Package-embedded: src/selfheal/patches/
+        pkg_path = (Path(__file__).resolve().parents[3] / configured).resolve()
+        if pkg_path.exists():
+            logger.debug("Using package-embedded templates dir: %s", pkg_path)
+            return pkg_path
+
+        # 4. Project root: selfheal/patches/ (editable install fallback)
+        root_path = (Path(__file__).resolve().parents[5] / configured).resolve()
+        if root_path.exists():
+            logger.debug("Using project-root templates dir: %s", root_path)
+            return root_path
+
+        # 5. Return CWD-relative as last resort (fallback patches will handle missing templates)
+        logger.warning(
+            "Templates dir not found at any location, using CWD-relative: %s",
+            cwd_path,
+        )
+        return cwd_path
 
     def _get_env(self) -> Environment:
         """Get or create Jinja2 environment."""

@@ -1,14 +1,14 @@
 """HTML dashboard generator for self-healing statistics.
 
 Produces a standalone HTML page from the experience store and metrics
-collector, showing fix success rate, common errors, and trends.
+collector, showing fix success rate, common errors, trend charts,
+and category distributions.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -18,11 +18,12 @@ from selfheal.core.experience import get_experience, ExperienceStore
 logger = logging.getLogger(__name__)
 
 _TEMPLATE = """<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SelfHeal Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9;
           --green: #3fb950; --red: #f85149; --yellow: #d2991d; --blue: #58a6ff; }
@@ -32,6 +33,8 @@ _TEMPLATE = """<!DOCTYPE html>
   h1 { font-size: 28px; margin-bottom: 8px; }
   .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 32px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 24px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
   .card h3 { font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
   .stat { font-size: 36px; font-weight: 700; margin-bottom: 4px; }
@@ -49,10 +52,13 @@ _TEMPLATE = """<!DOCTYPE html>
   .badge.blue { background: rgba(88,166,255,0.15); color: var(--blue); }
   .bar-container { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 8px; }
   .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+  .chart-container { position: relative; height: 300px; width: 100%; }
+  .chart-container canvas { width: 100% !important; height: 100% !important; }
+  .no-data { text-align: center; color: #8b949e; padding: 40px; font-size: 14px; }
 </style>
 </head>
 <body>
-<h1>\ud83d\udd27 SelfHeal Dashboard</h1>
+<h1>&#x1F527; SelfHeal Dashboard</h1>
 <p class="subtitle">Generated {{generated_at}} | Auto-fix pipeline statistics</p>
 
 <div class="grid">
@@ -88,6 +94,23 @@ _TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
+<div class="grid-2">
+  <div class="card">
+    <h3>&#x1F4C8; Fix Trend (Last 30 Days)</h3>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+    <div class="no-data" id="trendNoData" style="display:none;">No trend data yet. Run the pipeline to collect metrics.</div>
+  </div>
+  <div class="card">
+    <h3>&#x1F36A; Error Categories</h3>
+    <div class="chart-container">
+      <canvas id="categoryChart"></canvas>
+    </div>
+    <div class="no-data" id="categoryNoData" style="display:none;">No category data yet.</div>
+  </div>
+</div>
+
 <div class="grid">
   <div class="card">
     <h3>Top Error Categories</h3>
@@ -116,6 +139,111 @@ _TEMPLATE = """<!DOCTYPE html>
 <p style="text-align:center;color:#8b949e;font-size:12px;margin-top:24px;">
   SelfHeal v0.1.0 &mdash; Auto-generated dashboard
 </p>
+
+<script>
+// === Fix Trend Line Chart ===
+const trendData = {{trend_json}};
+const trendCtx = document.getElementById('trendChart').getContext('2d');
+if (trendData && trendData.labels && trendData.labels.length > 0) {
+  new Chart(trendCtx, {
+    type: 'line',
+    data: {
+      labels: trendData.labels,
+      datasets: [{
+        label: 'Total Fixes Learned',
+        data: trendData.experiences,
+        borderColor: '#58a6ff',
+        backgroundColor: 'rgba(88,166,255,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#58a6ff',
+      }, {
+        label: 'Total Successes (Reused)',
+        data: trendData.successes,
+        borderColor: '#3fb950',
+        backgroundColor: 'rgba(63,185,80,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#3fb950',
+      }, {
+        label: 'Unique Signatures',
+        data: trendData.signatures,
+        borderColor: '#d2991d',
+        backgroundColor: 'rgba(210,153,29,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#d2991d',
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#8b949e', boxWidth: 12, padding: 16, font: { size: 11 } }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b949e', font: { size: 10 } },
+          grid: { color: 'rgba(48,54,61,0.5)' }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#8b949e', font: { size: 10 }, precision: 0 },
+          grid: { color: 'rgba(48,54,61,0.5)' }
+        }
+      },
+      interaction: { intersect: false, mode: 'index' }
+    }
+  });
+  document.getElementById('trendNoData').style.display = 'none';
+} else {
+  document.getElementById('trendChart').style.display = 'none';
+  document.getElementById('trendNoData').style.display = 'block';
+}
+
+// === Error Category Doughnut Chart ===
+const categoryData = {{category_json}};
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+if (categoryData && categoryData.labels && categoryData.labels.length > 0) {
+  const palette = [
+    '#58a6ff', '#3fb950', '#d2991d', '#f85149', '#bc8cff',
+    '#f778ba', '#79c0ff', '#56d364', '#e3b341', '#ff7b72',
+    '#a5d6ff', '#c9d1d9', '#8b949e', '#ffa657', '#7ee787'
+  ];
+  new Chart(categoryCtx, {
+    type: 'doughnut',
+    data: {
+      labels: categoryData.labels,
+      datasets: [{
+        data: categoryData.counts,
+        backgroundColor: palette.slice(0, categoryData.labels.length),
+        borderColor: '#0d1117',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#8b949e', padding: 12, font: { size: 11 } }
+        }
+      }
+    }
+  });
+  document.getElementById('categoryNoData').style.display = 'none';
+} else {
+  document.getElementById('categoryChart').style.display = 'none';
+  document.getElementById('categoryNoData').style.display = 'block';
+}
+</script>
 </body>
 </html>"""
 
@@ -147,13 +275,23 @@ def _load_experience_data() -> dict[str, Any]:
         "SELECT * FROM experiences ORDER BY last_used DESC LIMIT 20"
     ).fetchall()
 
+    # Load metrics history for trend chart
+    trend = experience.get_metrics_history(days=30)
+
+    # Build category breakdown for doughnut chart from latest snapshot
+    category_breakdown = {}
+    if trend:
+        category_breakdown = trend[-1].get("category_breakdown", {})
+
     return {
         "total_experiences": total,
         "unique_signatures": unique,
         "total_successes": total_successes,
         "top_categories": [(r["category"], r["cnt"]) for r in top_categories],
-        "top_error_types": [(r["error_type"], r["cnt"]) for r in recent],
+        "top_error_types": [(r["error_type"], r["cnt"]) for r in top_error_types],
         "recent_fixes": [dict(r) for r in recent],
+        "trend": trend,
+        "category_breakdown": category_breakdown,
     }
 
 
@@ -193,6 +331,27 @@ def _render_recent_fixes(recent: list[dict[str, Any]]) -> str:
     return "\n      ".join(rows)
 
 
+def _build_trend_json(trend: list[dict[str, Any]]) -> str:
+    """Build JSON for the trend line chart."""
+    if not trend:
+        return json.dumps({"labels": [], "experiences": [], "successes": [], "signatures": []})
+    return json.dumps({
+        "labels": [d["snapshot_date"] for d in trend],
+        "experiences": [d["total_experiences"] for d in trend],
+        "successes": [d["total_successes"] for d in trend],
+        "signatures": [d["unique_signatures"] for d in trend],
+    })
+
+
+def _build_category_json(breakdown: dict[str, int]) -> str:
+    """Build JSON for the category doughnut chart."""
+    if not breakdown:
+        return json.dumps({"labels": [], "counts": []})
+    labels = list(breakdown.keys())
+    counts = list(breakdown.values())
+    return json.dumps({"labels": labels, "counts": counts})
+
+
 def generate_html(output_path: Optional[str] = None) -> str:
     """Generate a standalone HTML dashboard and optionally write it to a file.
 
@@ -204,7 +363,7 @@ def generate_html(output_path: Optional[str] = None) -> str:
     """
     data = _load_experience_data()
 
-    # Pipeline metrics (from experience store only)
+    # Pipeline metrics
     pipeline_runs = data["total_successes"]  # approximate by total success count
     avg_pipeline_time = 0.0
 
@@ -229,6 +388,8 @@ def generate_html(output_path: Optional[str] = None) -> str:
         .replace("{{top_categories}}", _render_top_categories(data["top_categories"]))
         .replace("{{top_error_types}}", _render_top_error_types(data["top_error_types"]))
         .replace("{{recent_fixes}}", _render_recent_fixes(data["recent_fixes"]))
+        .replace("{{trend_json}}", _build_trend_json(data["trend"]))
+        .replace("{{category_json}}", _build_category_json(data["category_breakdown"]))
     )
 
     if output_path:

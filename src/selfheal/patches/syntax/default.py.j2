@@ -1,0 +1,10 @@
+{# SyntaxError fix – documents the error location (best-effort, syntax is hard to auto-fix) #}
+{%- set line = error_line or 1 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - 1, 1] | max }},1 +{{ [line - 1, 1] | max }},4 @@
+-{{ original_code or '# (syntax error location)' }}
++# SelfHeal: identified a {{ error_type }} at this location.
++# Error: {{ error_message }}
++# Manual review required — check indentation, missing colons, brackets, or quotes.
++# Once fixed, remove this comment block and re-run the test.

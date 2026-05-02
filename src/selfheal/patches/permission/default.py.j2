@@ -1,0 +1,18 @@
+{# PermissionError fix – skip with user-friendly message #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 9 }} @@
+ {{ ' ' }}{{ original_code or '# (original restricted-access code)' }}
++# SelfHeal: permission denied – test skipped; check file/directory permissions
++import pytest
++import os
++
++
++@pytest.mark.skipif(
++    not os.access("{{ target_file }}", os.R_OK),
++    reason="Permission denied for {{ target_file | default('target') }} – skipping {{ error_func or 'test' }}"
++)
++def {{ error_func or 'test_permission' }}():
++    {{ original_code.strip() if original_code else '# (original restricted-access logic)' }}

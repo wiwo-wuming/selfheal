@@ -1,0 +1,14 @@
+{# ImportError / ModuleNotFoundError fix – adds optional import with skip #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 2 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 6 }} @@
+ {{ ' ' }}{{ original_code or '# (original import)' }}
++# SelfHeal: made import optional; test skipped if module is unavailable
++import pytest
++{% if missing_module %}
++{{ missing_module }} = pytest.importorskip("{{ missing_module }}")
++{% else %}
++pytest.importorskip("the_missing_module")
++{% endif %}

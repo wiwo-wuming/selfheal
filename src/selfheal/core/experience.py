@@ -56,6 +56,19 @@ class ExperienceStore:
         );
         CREATE INDEX idx_signature ON experiences(signature);
         CREATE INDEX idx_category ON experiences(category);
+
+        CREATE TABLE metrics_snapshot (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_date   TEXT NOT NULL,
+            total_experiences INTEGER DEFAULT 0,
+            unique_signatures INTEGER DEFAULT 0,
+            total_successes   INTEGER DEFAULT 0,
+            pipeline_runs     INTEGER DEFAULT 0,
+            avg_pipeline_time REAL DEFAULT 0.0,
+            category_breakdown TEXT DEFAULT '{}',
+            snapshot_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX idx_snapshot_date ON metrics_snapshot(snapshot_date);
     """
 
     def __init__(self, db_path: Optional[str] = None):
@@ -83,6 +96,20 @@ class ExperienceStore:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_signature ON experiences(signature)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_category ON experiences(category)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS metrics_snapshot (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_date   TEXT NOT NULL,
+                total_experiences INTEGER DEFAULT 0,
+                unique_signatures INTEGER DEFAULT 0,
+                total_successes   INTEGER DEFAULT 0,
+                pipeline_runs     INTEGER DEFAULT 0,
+                avg_pipeline_time REAL DEFAULT 0.0,
+                category_breakdown TEXT DEFAULT '{}',
+                snapshot_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshot_date ON metrics_snapshot(snapshot_date)")
         conn.commit()
         logger.info("ExperienceStore initialized at %s", self.db_path)
 
@@ -242,6 +269,90 @@ class ExperienceStore:
         if removed:
             logger.info("Experience: pruned %d stale entries", removed)
         return removed
+
+    # ------------------------------------------------------------------
+    # Metrics snapshot (for dashboard charts)
+    # ------------------------------------------------------------------
+
+    def record_metrics_snapshot(
+        self,
+        pipeline_runs: int = 0,
+        avg_pipeline_time: float = 0.0,
+    ) -> None:
+        """Record a daily snapshot of current store metrics.
+
+        Should be called after each pipeline batch run to accumulate
+        trend data for the dashboard charts.
+
+        Args:
+            pipeline_runs: Number of pipeline runs in this batch.
+            avg_pipeline_time: Average pipeline duration in seconds.
+        """
+        conn = self._get_conn()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Gather current stats
+        total = conn.execute("SELECT COUNT(*) FROM experiences").fetchone()[0]
+        unique = conn.execute(
+            "SELECT COUNT(DISTINCT signature) FROM experiences"
+        ).fetchone()[0]
+        successes = conn.execute(
+            "SELECT COALESCE(SUM(success_count), 0) FROM experiences"
+        ).fetchone()[0]
+
+        # Category breakdown as JSON
+        cats = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM experiences "
+            "GROUP BY category ORDER BY cnt DESC"
+        ).fetchall()
+        breakdown = {r["category"]: r["cnt"] for r in cats}
+
+        # Upsert: update if today's snapshot already exists
+        conn.execute(
+            """INSERT INTO metrics_snapshot
+               (snapshot_date, total_experiences, unique_signatures,
+                total_successes, pipeline_runs, avg_pipeline_time, category_breakdown)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(snapshot_date) DO UPDATE SET
+                total_experiences = excluded.total_experiences,
+                unique_signatures = excluded.unique_signatures,
+                total_successes = excluded.total_successes,
+                pipeline_runs = pipeline_runs + excluded.pipeline_runs,
+                avg_pipeline_time = excluded.avg_pipeline_time,
+                category_breakdown = excluded.category_breakdown,
+                snapshot_at = CURRENT_TIMESTAMP""",
+            (today, total, unique, successes, pipeline_runs, avg_pipeline_time,
+             json.dumps(breakdown)),
+        )
+        conn.commit()
+        logger.info(
+            "Metrics snapshot recorded for %s: %d experiences, %d successes",
+            today, total, successes,
+        )
+
+    def get_metrics_history(self, days: int = 30) -> list[dict[str, Any]]:
+        """Get metrics snapshot history for the last N days.
+
+        Returns list of dicts with keys: snapshot_date, total_experiences,
+        unique_signatures, total_successes, pipeline_runs, avg_pipeline_time,
+        category_breakdown (parsed JSON).
+        """
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT * FROM metrics_snapshot
+               WHERE snapshot_date >= date('now', ?)
+               ORDER BY snapshot_date ASC""",
+            (f"-{days} days",),
+        ).fetchall()
+        results = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["category_breakdown"] = json.loads(d.get("category_breakdown", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                d["category_breakdown"] = {}
+            results.append(d)
+        return results
 
     def close(self) -> None:
         if self._conn:

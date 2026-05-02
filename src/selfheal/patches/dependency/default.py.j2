@@ -1,0 +1,17 @@
+{# Dependency / version-conflict fix – skip test with install hint #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 9 }} @@
+ {{ ' ' }}{{ original_code or '# (original dependency-requiring code)' }}
++# SelfHeal: dependency or version conflict – test skipped until resolved
++import pytest
++
++
++@pytest.mark.skip(
++    reason="Dependency conflict detected: {{ error_message | truncate(80) }}. "
++           "Run 'pip install --upgrade <package>' to resolve."
++)
++def {{ error_func or 'test_dependency' }}():
++    {{ original_code.strip() if original_code else '# (original dependency-requiring logic)' }}

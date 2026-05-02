@@ -1,0 +1,15 @@
+{# Flaky-test fix – add retry marker and xfail on intermittent failure #}
+{%- set line = error_line or 1 -%}
+{%- set ctx_lines = 3 -%}
+--- a/{{ target_file }}
++++ b/{{ target_file }}
+@@ -{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 1 }} +{{ [line - ctx_lines, 1] | max }},{{ ctx_lines * 2 + 8 }} @@
+ {{ ' ' }}{{ original_code or '# (original flaky code)' }}
++# SelfHeal: flaky test detected – marked as expected to sometimes fail
++import pytest
++
++
++@pytest.mark.flaky(reruns=3, reruns_delay=2)
++@pytest.mark.xfail(reason="Intermittent failure: {{ error_message | truncate(60) }}", strict=False)
++def {{ error_func or 'test_flaky' }}():
++    {{ original_code.strip() if original_code else '# (original flaky logic)' }}
