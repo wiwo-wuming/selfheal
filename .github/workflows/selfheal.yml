@@ -93,24 +93,25 @@ jobs:
 
       - name: Extract failures from pytest JSON report
         run: |
-          python -c "
+          python << 'PYEOF'
 import json
-with open('pytest-results.json') as f:
+with open("pytest-results.json") as f:
     report = json.load(f)
 failures = []
-for test in report.get('tests', []):
-    if test['outcome'] in ('failed', 'error'):
+for test in report.get("tests", []):
+    if test["outcome"] in ("failed", "error"):
+        longrepr = test.get("call", {}).get("longrepr", "") or ""
         failures.append({
-            'test_path': test.get('nodeid', ''),
-            'error_type': 'AssertionError' if 'assert' in (test.get('call', {}).get('longrepr', '') or '') else 'RuntimeError',
-            'error_message': (test.get('call', {}).get('longrepr', '') or '')[:500],
-            'traceback': test.get('call', {}).get('longrepr', ''),
+            "test_path": test.get("nodeid", ""),
+            "error_type": "AssertionError" if "assert" in longrepr else "RuntimeError",
+            "error_message": longrepr[:500],
+            "traceback": longrepr,
         })
-with open('failures.json', 'w') as f:
+with open("failures.json", "w") as f:
     json.dump(failures, f)
 if not failures:
-    print('No test failures extracted')
-" 2>&1
+    print("No test failures extracted")
+PYEOF
 
       - name: Run SelfHeal batch repair
         env:
