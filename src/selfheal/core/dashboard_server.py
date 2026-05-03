@@ -262,12 +262,51 @@ def index():
 # CLI entry
 # ---------------------------------------------------------------------------
 
-def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False):
-    """Start the dashboard server."""
+def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False, production: bool = False):
+    """Start the dashboard server.
+
+    Args:
+        host: Bind address.
+        port: Port number.
+        open_browser: Open browser on start.
+        production: Use gunicorn instead of Flask dev server.
+    """
     import webbrowser
 
     if open_browser:
         webbrowser.open(f"http://{host}:{port}")
 
-    print(f"SelfHeal Dashboard: http://{host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    if production:
+        try:
+            import gunicorn.app.base  # noqa: F401
+        except ImportError:
+            print("gunicorn not installed. Run: pip install gunicorn")
+            print("Falling back to Flask dev server...")
+            production = False
+
+    if production:
+        from gunicorn.app.base import BaseApplication
+
+        class StandaloneApp(BaseApplication):
+            def __init__(self):
+                self.options = {
+                    "bind": f"{host}:{port}",
+                    "workers": 4,
+                    "worker_class": "sync",
+                    "timeout": 60,
+                }
+                super().__init__()
+
+            def load_config(self):
+                for k, v in self.options.items():
+                    if k in self.cfg.settings and v is not None:
+                        self.cfg.set(k.lower(), v)
+
+            def load(self):
+                return app
+
+        print(f"SelfHeal Dashboard (gunicorn): http://{host}:{port}")
+        StandaloneApp().run()
+    else:
+        print(f"SelfHeal Dashboard (dev): http://{host}:{port}")
+        app.run(host=host, port=port, debug=False)

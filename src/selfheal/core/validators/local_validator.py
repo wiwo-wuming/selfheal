@@ -1,6 +1,7 @@
 """Local validator implementation."""
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -35,13 +36,21 @@ class LocalValidator(ValidatorInterface):
             # Determine the test command
             cmd = self._build_test_command(test_path)
 
-            # Run the test
+            # Run the test with UTF-8 encoding to avoid Windows GBK crashes
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONUTF8"] = "1"
+            env["LANG"] = "en_US.UTF-8"
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
                 cwd=self._get_working_dir(),
+                env=env,
+                encoding="utf-8",
+                errors="replace",
             )
 
             duration = time.time() - start_time

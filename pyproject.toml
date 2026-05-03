@@ -53,6 +53,10 @@ github = [
 hotreload = [
     "watchdog>=3.0.0",
 ]
+dashboard = [
+    "flask>=3.0.0",
+    "gunicorn>=21.0.0",
+]
 
 [project.scripts]
 selfheal = "selfheal.cli:main"

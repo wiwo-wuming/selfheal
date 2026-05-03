@@ -537,8 +537,9 @@ def metrics(ctx: click.Context, config: Optional[str], as_json: bool) -> None:
 @click.option("--serve", is_flag=True, help="Start interactive dashboard server")
 @click.option("--port", default=8080, help="Server port (default: 8080)")
 @click.option("--open", "open_browser", is_flag=True, help="Open browser automatically")
+@click.option("--production", is_flag=True, help="Use gunicorn (production mode)")
 @click.pass_context
-def dashboard(ctx: click.Context, config: Optional[str], output: Optional[str], serve: bool, port: int, open_browser: bool) -> None:
+def dashboard(ctx: click.Context, config: Optional[str], output: Optional[str], serve: bool, port: int, open_browser: bool, production: bool) -> None:
     """Generate an HTML dashboard or start an interactive dashboard server."""
     from selfheal.config import Config as CfgCls
 
@@ -547,7 +548,7 @@ def dashboard(ctx: click.Context, config: Optional[str], output: Optional[str], 
 
     if serve:
         from selfheal.core.dashboard_server import run_server
-        run_server(port=port, open_browser=open_browser)
+        run_server(port=port, open_browser=open_browser, production=production)
         return
 
     from selfheal.core.dashboard import generate_html
