@@ -75,10 +75,12 @@ class SelfHealEngine:
         self._watchers: list = []   # multi-watcher support (populated below)
         self._hooks: list[Hook] = hooks or [MetricsHook()]
         self._plugin_watcher: Optional[PluginWatcher] = None  # type: ignore[name-defined]  # set in _setup_plugin_watcher
+        self._llm_patcher: Optional[object] = None     # fallback LLM patcher
         self._setup_components()
         self._setup_reporters()
         self._setup_watchers()
         self._setup_plugin_watcher()
+        self._setup_llm_fallback()
         self._setup_pipeline()
 
     def _setup_components(self) -> None:
@@ -429,6 +431,38 @@ class SelfHealEngine:
         self._plugin_watcher = pw
         self._watchers.append(pw)
         logger.info(f"PluginWatcher integrated (dir={plugin_cfg.plugin_dir})")
+
+    def _setup_llm_fallback(self) -> None:
+        """Set up an LLM patcher fallback for when template patches fail validation.
+
+        Only activated when:
+        - The primary patcher is 'template'
+        - An LLM config is available (via patcher config or top-level llm config)
+        - strategy_fallback is enabled in engine config
+        """
+        if not self.config.engine.strategy_fallback:
+            return
+        if self.config.patcher.type != "template":
+            return
+
+        llm_cfg = self.config.patcher.llm or self.config.llm
+        if not llm_cfg:
+            return
+
+        llm_patcher_cls = self.registry.get_patcher("llm")
+        if llm_patcher_cls is None:
+            logger.warning("LLM patcher not registered, fallback unavailable")
+            return
+
+        from selfheal.config import PatcherConfig
+
+        fallback_cfg = PatcherConfig(
+            type="llm",
+            llm=llm_cfg,
+            refine_rounds=getattr(self.config.patcher, "refine_rounds", 2),
+        )
+        self._llm_patcher = llm_patcher_cls(fallback_cfg)
+        logger.info("LLM fallback patcher enabled for strategy_fallback")
 
     def check_plugin_integrity(self) -> dict[str, list[str]]:
         """Verify integrity of all tracked plugin files.
