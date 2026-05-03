@@ -6,10 +6,15 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from typing import TYPE_CHECKING
+
 from selfheal.config import Config, WatcherConfig
 from selfheal.core import register_defaults  # noqa: F401 - triggers auto-registration
 from selfheal.core.applier import PatchApplier
 from selfheal.core.hooks import Hook, MetricsHook
+
+if TYPE_CHECKING:
+    from selfheal.core.watchers.plugin_watcher import PluginWatcher
 from selfheal.core.metrics import MetricsCollector
 from selfheal.events import (
     ErrorSeverity,
@@ -69,7 +74,7 @@ class SelfHealEngine:
         self._reporters: list = []  # multi-reporter chain (populated below)
         self._watchers: list = []   # multi-watcher support (populated below)
         self._hooks: list[Hook] = hooks or [MetricsHook()]
-        self._plugin_watcher: Optional[object] = None  # set in _setup_plugin_watcher
+        self._plugin_watcher: Optional[PluginWatcher] = None  # type: ignore[name-defined]  # set in _setup_plugin_watcher
         self._setup_components()
         self._setup_reporters()
         self._setup_watchers()
@@ -230,7 +235,7 @@ class SelfHealEngine:
                 raise
             except Exception as exc:
                 logger.error(
-                    f"Pipeline stage '{stage_name}' failed: {exc}", exc_info=True
+                    "Pipeline stage '%s' failed: %s", stage_name, exc, exc_info=True
                 )
                 stage_error = exc
                 context["_error"] = str(exc)
@@ -438,7 +443,7 @@ class SelfHealEngine:
         """
         if self._plugin_watcher is None:
             return {"ok": [], "modified": [], "missing": []}
-        return self._plugin_watcher.check_integrity()
+        return self._plugin_watcher.check_integrity()  # type: ignore[no-any-return]
 
     def _check_integrity_before_failure(self) -> bool:
         """Run plugin integrity check before processing a failure.

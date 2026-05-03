@@ -323,13 +323,49 @@ class TemplatePatcher(PatcherInterface):
             logger.debug("Experience lookup skipped", exc_info=True)
         return None
 
+    @staticmethod
+    def _try_experience_fallback(classification: ClassificationEvent) -> Optional[tuple[str, Optional[str]]]:
+        """Search experience store without category restriction for fallback.
+
+        When no template exists for a category, this broader search may find
+        a previously successful patch for a similar error regardless of category.
+
+        Returns (patch_content, target_file) if found, None otherwise.
+        """
+        try:
+            from selfheal.core.experience import get_experience
+
+            experience = get_experience()
+            similar = experience.find_similar(
+                event=classification.original_event,
+                category=None,  # broader: match any category
+                limit=1,
+            )
+            if similar:
+                entry = similar[0]
+                logger.info(
+                    "Fallback experience match: reusing patch (signature=%s, "
+                    "category=%s, success_count=%d)",
+                    entry["signature"], entry.get("category", "?"), entry["success_count"],
+                )
+                return entry["patch_content"], classification.original_event.test_path
+        except Exception:
+            logger.debug("Fallback experience lookup skipped", exc_info=True)
+        return None
+
     def _generate_fallback_patch(self, classification: ClassificationEvent) -> tuple[str, Optional[str]]:
         """Generate an executable fallback patch when no template is found.
 
         Returns a tuple of (patch_content, target_file).
-        Produces a unified-diff that wraps the failing code in a defensive
-        try/except block so the test suite doesn't abort on this error.
+
+        Tries the experience store with a broader (category-less) search first.
+        If a match is found it is preferred over the hardcoded defensive patch.
         """
+        # --- try experience store without category restriction ---
+        experience_patch = self._try_experience_fallback(classification)
+        if experience_patch is not None:
+            return experience_patch
+
         category = classification.category
         event = classification.original_event
 

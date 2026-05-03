@@ -100,6 +100,7 @@ Code should be well-formatted and follow best practices."""
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM API."""
+        assert self.llm_config is not None
         client = self._get_client()
         provider = self.llm_config.provider.lower()
 
@@ -117,6 +118,8 @@ Code should be well-formatted and follow best practices."""
                 messages=[{"role": "user", "content": prompt}],
             )
             return response.content[0].text
+        else:
+            raise ValueError(f"Unknown LLM provider: {provider}")
 
     def _extract_code(self, response: str) -> str:
         """Extract code from LLM response."""

@@ -142,6 +142,7 @@ Respond with JSON:
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM API."""
+        assert self.llm_config is not None
         client = self._get_client()
         provider = self.llm_config.provider.lower()
 
@@ -159,6 +160,8 @@ Respond with JSON:
                 messages=[{"role": "user", "content": prompt}],
             )
             return response.content[0].text
+        else:
+            raise ValueError(f"Unknown LLM provider: {provider}")
 
     def _parse_response(
         self,

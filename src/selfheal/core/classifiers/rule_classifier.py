@@ -1,7 +1,10 @@
 """Rule-based classifier implementation."""
 
+import logging
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from selfheal.config import ClassifierConfig, RuleConfig
 from selfheal.events import (
@@ -53,30 +56,33 @@ class RuleClassifier(ClassifierInterface):
 
     name = "rule"
 
-    def _compile_rules(self) -> list[dict]:
+    def _compile_rules(self) -> list[dict[str, object]]:
         """Compile rules from config or use defaults.
 
         Supports both RuleConfig objects (from typed config) and plain dicts
         (from DEFAULT_RULES / legacy config) for backward compatibility.
         """
         rules = self.config.rules if self.config.rules else DEFAULT_RULES
-        compiled = []
+        compiled: list[dict[str, object]] = []
         for rule in rules:
             if isinstance(rule, RuleConfig):
                 compiled.append({
                     "pattern": re.compile(rule.pattern),
                     "category": rule.category,
-                    "severity": ErrorSeverity(rule.severity),
+                    "severity": rule.severity,  # already ErrorSeverity via Pydantic validator
                 })
             else:
                 # Legacy dict format — category may be ErrorCategory enum or str
-                category = rule["category"]
+                category: object = rule["category"]
                 if isinstance(category, ErrorCategory):
                     category = category.value
+                pattern: object = rule["pattern"]
+                if isinstance(pattern, str):
+                    pattern = re.compile(pattern)
                 compiled.append({
-                    "pattern": re.compile(rule["pattern"]),
+                    "pattern": pattern,
                     "category": category,
-                    "severity": ErrorSeverity(rule.get("severity", "medium")),
+                    "severity": ErrorSeverity(str(rule.get("severity", "medium"))),
                 })
         return compiled
 
@@ -87,7 +93,7 @@ class RuleClassifier(ClassifierInterface):
         error_message = event.error_message
         traceback = event.traceback
 
-        best_match: Optional[dict] = None
+        best_match: Optional[dict[str, object]] = None
         best_confidence = 0.0
 
         # Check error type first (highest priority)
@@ -123,6 +129,10 @@ class RuleClassifier(ClassifierInterface):
             )
 
         # No match found
+        logger.info(
+            "No rule matched for error_type=%s, returning UNKNOWN classification",
+            error_type,
+        )
         return ClassificationEvent(
             original_event=event,
             category=ErrorCategory.UNKNOWN.value,

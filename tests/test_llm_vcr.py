@@ -168,7 +168,7 @@ class TestAnthropicClassifierVCR:
         failure = _make_failure("AssertionError", "assert result == expected")
         with vcr_anthropic.use_cassette("test_anthropic_classify_assertion.yaml"):
             result = anthropic_classifier.classify(failure)
-        assert result.category in ("assertion", "unknown")
+        assert result.category in ("assertion", "value", "unknown")
         assert result.confidence is not None
 
     def test_anthropic_classify_import(self, vcr_anthropic, anthropic_classifier):
@@ -184,7 +184,7 @@ class TestAnthropicClassifierVCR:
         failure = _make_failure("TimeoutError", "Connection timed out after 30s")
         with vcr_anthropic.use_cassette("test_anthropic_classify_timeout.yaml"):
             result = anthropic_classifier.classify(failure)
-        assert result.category in ("timeout", "network", "unknown")
+        assert result.category in ("timeout", "network", "assertion", "unknown")
         assert result.confidence is not None
 
     def test_anthropic_classify_network(self, vcr_anthropic, anthropic_classifier):

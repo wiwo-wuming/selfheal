@@ -1,0 +1,103 @@
+interactions:
+- request:
+    body: '{"max_tokens":2048,"messages":[{"role":"user","content":"Generate a fix
+      for the following test failure.\n\nTest: tests/test_calc.py::test_foo\nError
+      Type: ImportError\nError Message: No module named ''requests''\nCategory: import\nSeverity:
+      high\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nGenerate
+      a patch that fixes this issue. Respond with:\n1. Brief explanation of the fix\n2.
+      The complete code patch\n\nCode should be well-formatted and follow best practices."}],"model":"claude-3-haiku-20240307"}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '605'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.deepseek.com/anthropic/v1/messages
+  response:
+    body:
+      string: '{"id":"736475b9-d230-43b4-b99e-faefa37c92f1","type":"message","role":"assistant","model":"deepseek-v4-flash","content":[{"type":"text","text":"##
+        Brief Explanation\n\nThe test failure has two issues:\n1. **ImportError**:
+        The module `requests` is missing from the environment - this needs to be installed
+        or the test needs to be updated to not require it\n2. **Assertion failure**:
+        The test asserts `1 == 2` which will always fail\n\nSince the traceback shows
+        the AssertionError occurs on line 5 in `test_calc.py`, the ImportError must
+        be happening on an earlier import line. The fix should:\n- Add `requests`
+        to project dependencies if needed, OR remove the import if it''s not used\n-
+        Fix the assertion logic to be meaningful\n\nSince we don''t have the full
+        test file, I''ll provide a general fix assuming `requests` might be needed
+        but the test logic is incorrect.\n\n## Complete Code Patch\n\n```python\n#
+        tests/test_calc.py\nimport pytest\nimport requests  # Make sure requests is
+        installed: pip install requests\nfrom calc import add  # Assuming calc module
+        has add function\n\ndef test_foo():\n    \"\"\"Test that validates basic addition
+        functionality.\"\"\"\n    # Fix the assertion - test something meaningful\n    result
+        = add(1, 2)\n    assert result == 3, f\"Expected 3 but got {result}\"\n```\n\n###
+        Alternative if `requests` is not needed:\n```python\n# tests/test_calc.py\nimport
+        pytest\n\ndef test_foo():\n    \"\"\"Test that validates something meaningful.\"\"\"\n    #
+        Fix the assertion logic\n    result = 1 + 1  # Or call your actual function\n    assert
+        result == 2, f\"Expected 2 but got {result}\"\n```\n\n### Also add to requirements.txt
+        if `requests` is needed:\n```\nrequests>=2.25.0\n```\n\nThe key fixes are:\n1.
+        **Add missing dependency** (`requests`) or remove unused import\n2. **Fix
+        assertion logic** from `1 == 2` to something meaningful and correct\n3. **Add
+        proper test documentation** with docstrings and meaningful variable names"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":128,"output_tokens":415,"service_tier":"standard"}}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 03 May 2026 03:05:01 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '2499612230168126170'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - 8d34e993b0f150afc46af685386b7631
+    status:
+      code: 200
+      message: OK
+version: 1

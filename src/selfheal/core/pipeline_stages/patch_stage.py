@@ -82,7 +82,7 @@ class PatchStage(PipelineStage):
                 patch.status = "pending_review" if not engine_cfg.auto_apply else "generated"
                 if patch.target_file and patch.patch_content:
                     patch.suggested_command = (
-                        f"python -m selfheal apply {patch.patch_id} "
+                        f"python -m selfheal apply --input <patch.json> "
                         f"--target {patch.target_file}"
                     )
                 # Record the actual generation result, not the review state

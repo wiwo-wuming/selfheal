@@ -1,0 +1,100 @@
+interactions:
+- request:
+    body: '{"max_tokens":2048,"messages":[{"role":"user","content":"Generate a fix
+      for the following test failure.\n\nTest: tests/test_calc.py::test_foo\nError
+      Type: AssertionError\nError Message: assert add(1, 2) == 4\nCategory: assertion\nSeverity:
+      medium\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nGenerate
+      a patch that fixes this issue. Respond with:\n1. Brief explanation of the fix\n2.
+      The complete code patch\n\nCode should be well-formatted and follow best practices."}],"model":"claude-3-haiku-20240307"}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '608'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.deepseek.com/anthropic/v1/messages
+  response:
+    body:
+      string: '{"id":"1f8317d9-61f0-4f35-be03-7f80ce4bb96e","type":"message","role":"assistant","model":"deepseek-v4-flash","content":[{"type":"text","text":"##
+        Explanation\n\nThe test failure shows that `add(1, 2)` returns an unexpected
+        result. The test expects `add(1, 2) == 4`, but the actual result must be different
+        (likely returning 3, which is the correct mathematical sum of 1+2). The error
+        message `assert 1 == 2` in the traceback suggests the test itself has a logic
+        error - it''s checking `1 == 2` instead of `add(1, 2) == 4`. \n\nHowever,
+        since the test is asserting that `add(1, 2) == 4`, and the correct sum is
+        3, the fix should be to either:\n1. Fix the test expectation to be `3` (since
+        1+2=3)\n2. Or fix the `add` function to return 4\n\nGiven standard mathematical
+        conventions, the test expectation is wrong - `add(1, 2)` should return 3.
+        So the fix is to correct the test assertion.\n\n## Complete Code Patch\n\n```python\n#
+        test_calc.py\n\ndef test_foo():\n    \"\"\"Test that add function correctly
+        sums two numbers.\"\"\"\n    # Fix: Changed expected value from 4 to 3 (1
+        + 2 = 3)\n    assert add(1, 2) == 3\n```\n\n**Alternative (if you need to
+        fix the add function instead):**\n\n```python\n# calc.py\n\ndef add(a, b):\n    \"\"\"Return
+        the sum of two numbers.\"\"\"\n    return a + b  # Ensure this returns the
+        correct sum\n```\n\n**Complete test file with documentation:**\n\n```python\n\"\"\"\nTests
+        for calculator module.\n\"\"\"\n\nimport pytest\nfrom calc import add\n\n\ndef
+        test_foo():\n    \"\"\"\n    Test that add function correctly sums two numbers.\n    \n    Expected:
+        add(1, 2) should equal 3 (1 + 2 = 3)\n    \"\"\"\n    assert add(1, 2) ==
+        3\n```"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":140,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":411,"service_tier":"standard"}}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 03 May 2026 02:55:21 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '1470655039906983890'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - b9508961df1c2db56f14bcef6b29bb3b
+    status:
+      code: 200
+      message: OK
+version: 1

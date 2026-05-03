@@ -32,18 +32,24 @@ class RuleConfig(BaseModel):
 
     pattern: str = Field(..., description="Regular expression to match against error type/message")
     category: str = Field(..., description="Error category, e.g. assertion, import, runtime")
-    severity: str = Field(default="medium", description="Severity level")
+    severity: object = Field(default="medium", description="Severity level (ErrorSeverity enum or string)")
 
-    @field_validator("severity")
+    @field_validator("severity", mode="before")
     @classmethod
-    def validate_severity(cls, v: str) -> str:
-        allowed = {"critical", "high", "medium", "low"}
-        normalized = v.strip().lower()
-        if normalized not in allowed:
-            raise ValueError(
-                f"Invalid severity '{v}'. Must be one of: {', '.join(sorted(allowed))}"
-            )
-        return normalized
+    def validate_severity(cls, v: object) -> object:
+        from selfheal.events import ErrorSeverity
+
+        if isinstance(v, ErrorSeverity):
+            return v
+        if isinstance(v, str):
+            try:
+                return ErrorSeverity(v.strip().lower())
+            except ValueError:
+                allowed = {s.value for s in ErrorSeverity}
+                raise ValueError(
+                    f"Invalid severity '{v}'. Must be one of: {', '.join(sorted(allowed))}"
+                ) from None
+        raise ValueError(f"Invalid severity type: {type(v)}")
 
     @field_validator("category")
     @classmethod

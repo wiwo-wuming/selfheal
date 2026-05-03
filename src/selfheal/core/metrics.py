@@ -1,9 +1,14 @@
 """Metrics collection for SelfHeal."""
 
+from __future__ import annotations
+
 import time
 from collections import defaultdict
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfheal.events import ErrorSeverity
 
 
 class MetricsCollector:
