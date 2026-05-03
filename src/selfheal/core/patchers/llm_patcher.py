@@ -70,13 +70,20 @@ class LLMPatcher(PatcherInterface):
         return self._client
 
     def generate(self, classification: ClassificationEvent) -> PatchEvent:
-        """Generate a patch with optionally multiple refinement rounds.
+        """Generate a patch with optionally multiple refinement rounds and quality scoring.
 
         Round 1: generate initial patch.
         Round 2..N: self-review → refine using feedback.
+        After generation: self-score quality 0-10, reject if below threshold.
         """
         if not self.llm_config:
             raise ValueError("LLM not configured")
+
+        quality_threshold = getattr(self, "quality_threshold", None)
+        if quality_threshold is None:
+            quality_threshold = float(
+                getattr(self.config, "quality_threshold", 4.0)
+            )
 
         try:
             # --- Round 1: initial generation ---
@@ -84,30 +91,54 @@ class LLMPatcher(PatcherInterface):
             response = self._call_llm(prompt)
             content = self._extract_code(response)
 
-            if self.refine_rounds <= 1:
+            patch_suffix = ""
+
+            # --- Rounds 2..N: self-review + refine ---
+            if self.refine_rounds > 1:
+                for round_num in range(2, self.refine_rounds + 1):
+                    logger.info(
+                        f"LLM self-refine round {round_num}/{self.refine_rounds}"
+                    )
+                    review_prompt = self._build_review_prompt(
+                        classification, content
+                    )
+                    review_response = self._call_llm(review_prompt)
+                    refined = self._extract_code(review_response)
+                    if refined and refined != content:
+                        content = refined
+                    else:
+                        logger.debug(
+                            "Refine round produced no change, "
+                            "keeping previous patch"
+                        )
+                patch_suffix = f"(refined_{self.refine_rounds}r)"
+
+            # --- Quality scoring ---
+            score = self._score_patch(classification, content)
+            patch_suffix += f" score={score}/10"
+            logger.info("LLM quality score: %d/10 for patch", score)
+
+            if score < quality_threshold:
+                logger.warning(
+                    "Patch quality score %d/10 below threshold %d, rejecting",
+                    score, quality_threshold,
+                )
                 return PatchEvent(
                     classification_event=classification,
                     patch_id=str(uuid.uuid4()),
-                    patch_content=content,
-                    generator="llm",
+                    patch_content=(
+                        "# SelfHeal: LLM patch rejected (quality score "
+                        f"{score}/10 < threshold {quality_threshold})\n"
+                        "# Original patch:\n" + content
+                    ),
+                    generator=f"llm{''.join(patch_suffix.split(' score')[0:1]) if ' score' in patch_suffix else ''}[rejected]",
                 )
-
-            # --- Rounds 2..N: self-review + refine ---
-            for round_num in range(2, self.refine_rounds + 1):
-                logger.info(f"LLM self-refine round {round_num}/{self.refine_rounds}")
-                review_prompt = self._build_review_prompt(classification, content)
-                review_response = self._call_llm(review_prompt)
-                refined = self._extract_code(review_response)
-                if refined and refined != content:
-                    content = refined
-                else:
-                    logger.debug("Refine round produced no change, keeping previous patch")
 
             return PatchEvent(
                 classification_event=classification,
                 patch_id=str(uuid.uuid4()),
                 patch_content=content,
-                generator=f"llm(refined_{self.refine_rounds}r)",
+                generator=f"llm{patch_suffix}",
             )
         except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             logger.error(f"LLM patch generation failed: {e}")
@@ -143,6 +174,57 @@ Rules:
 - If an import is missing, add it. If a function signature is wrong, fix it.
 - If a value is incorrect, correct it based on the error message.
 - Include a brief explanation BEFORE the diff."""
+
+    def _score_patch(
+        self, classification: ClassificationEvent, patch_content: str
+    ) -> int:
+        """Score a patch on a 0-10 scale via LLM self-evaluation.
+
+        0-3:  harmful (silent pass, xfail, skip, empty try-except)
+        4-6:  acceptable (defensive guard with logging)
+        7-8:  good (addresses root cause)
+        9-10: excellent (elegant, minimal, correct)
+        """
+        event = classification.original_event
+
+        prompt = f"""You are a senior code reviewer. Score the following patch on a 0-10 scale.
+
+**Scoring guide:**
+- 0-3: Harmful — uses pytest.skip, pytest.xfail, empty try/except/pass to hide the error
+- 4-6: Acceptable — adds defensive guard with proper error logging
+- 7-8: Good — addresses the root cause correctly
+- 9-10: Excellent — elegant, minimal change, fully correct
+
+=== TEST FAILURE ===
+Test: {event.test_path}
+Error type: {event.error_type}
+Error message: {event.error_message[:300]}
+Category: {classification.category}
+
+=== PATCH ===
+{patch_content[:800]}
+
+Respond with ONLY a single integer (0-10). No text, no explanation."""
+
+        try:
+            response = self._call_llm(prompt)
+            import re
+            match = re.search(r"\b(\d+)\b", response.strip())
+            if match:
+                score = int(match.group(1))
+                return max(0, min(10, score))
+            logger.warning("Could not parse quality score from: %s", response[:80])
+        except Exception:
+            logger.debug("Quality scoring skipped", exc_info=True)
+
+        # Fallback heuristic: detect bad patterns
+        bad = ["pytest.skip", "pytest.xfail", "pass  #", "pass\n"]
+        good = ["def ", "import ", "return ", "class "]
+        bad_count = sum(1 for p in bad if p in patch_content)
+        good_count = sum(1 for p in good if p in patch_content)
+        if bad_count > good_count:
+            return 3
+        return 6
 
     def _build_review_prompt(
         self, classification: ClassificationEvent, current_patch: str

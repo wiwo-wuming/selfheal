@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +14,27 @@ if TYPE_CHECKING:
     from selfheal.engine import SelfHealEngine
 
 logger = logging.getLogger(__name__)
+
+# Patterns indicating a defensive/low-quality patch
+_QUALITY_ISSUE_PATTERNS = [
+    (r"(?m)^\+\s*pass\s*(#.*)?$", "empty pass statement added"),
+    (r"pytest\.skip\(", "pytest.skip() hides the error"),
+    (r"pytest\.xfail\(", "pytest.xfail() marks failure as expected"),
+    (r"pytest\.importorskip\(", "importorskip bypasses import error"),
+    (r"(?m)^\+.*try:\s*$", "bare try may swallow errors without logging"),
+]
+
+
+def _check_patch_quality(patch_content: str) -> list[str]:
+    """Check a patch for defensive-only patterns.
+
+    Returns a list of quality issue descriptions (empty = good quality).
+    """
+    issues = []
+    for pattern, desc in _QUALITY_ISSUE_PATTERNS:
+        if re.search(pattern, patch_content):
+            issues.append(desc)
+    return issues
 
 
 class PatchStage(PipelineStage):
@@ -89,8 +111,16 @@ class PatchStage(PipelineStage):
                         f"python -m selfheal apply --input <patch.json> "
                         f"--target {patch.target_file}"
                     )
+                    # Quality check: detect defensive-only patches
+                    quality_issues = _check_patch_quality(patch.patch_content)
+                    if quality_issues:
+                        logger.warning(
+                            "Patch %s has quality issues: %s",
+                            patch.patch_id, ", ".join(quality_issues),
+                        )
+                        patch.status = "low_quality"
                 # Record the actual generation result, not the review state
-                engine.metrics.record_patch("generated")
+                engine.metrics.record_patch(patch.status)
                 all_patches.append(patch)
 
         context["patches"] = all_patches

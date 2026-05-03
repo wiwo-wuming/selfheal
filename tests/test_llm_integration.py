@@ -254,7 +254,7 @@ class TestLLMPatcher:
 
         result = patcher.generate(sample_classification)
 
-        assert result.generator in ("llm", "llm(refined_2r)")
+        assert result.generator.startswith("llm")
         assert "CREATE TABLE" in result.patch_content
         assert result.classification_event == sample_classification
         assert len(result.patch_id) > 0
@@ -273,7 +273,7 @@ class TestLLMPatcher:
 
         result = patcher.generate(sample_classification)
 
-        assert result.generator in ("llm", "llm(refined_2r)")
+        assert result.generator.startswith("llm")
         assert "LLM generation failed" in result.patch_content
         assert result.classification_event == sample_classification
 

@@ -94,8 +94,15 @@ class LocalValidator(ValidatorInterface):
             )
 
     def _build_test_command(self, test_path: str) -> list[str]:
-        """Build the test command."""
-        cmd = ["pytest", "-v", "--tb=short", test_path]
+        """Build the test command.
+
+        If test_path is empty / not specific, runs the full test suite.
+        """
+        if test_path and "::" not in test_path and "/" not in test_path:
+            # Fall back to run the whole tests/ dir for full regression
+            cmd = ["pytest", "-v", "--tb=short", "tests/"]
+        else:
+            cmd = ["pytest", "-v", "--tb=short", test_path]
 
         if self.venv_path:
             # Cross-platform venv python detection

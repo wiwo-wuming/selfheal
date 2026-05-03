@@ -208,6 +208,7 @@ class PatcherConfig(BaseModel):
     templates_dir: str = "patches/"
     llm: Optional[LLMConfig] = None
     refine_rounds: int = 2  # LLM multi-round self-refinement (1 = single pass)
+    quality_threshold: float = 4.0  # reject LLM patches scored below this (0-10)
 
 
 class ValidatorConfig(BaseModel):
