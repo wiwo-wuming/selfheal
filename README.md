@@ -1,235 +1,172 @@
 # SelfHeal
 
 [![CI](https://github.com/wiwo-wuming/selfheal/actions/workflows/selfheal.yml/badge.svg)](https://github.com/wiwo-wuming/selfheal/actions/workflows/selfheal.yml)
+[![PyPI](https://img.shields.io/badge/pypi-0.1.0-blue)](https://pypi.org/project/selfheal/)
 
-Intelligent test self-healing framework. Automatically detects test failures, classifies errors, generates fix patches, validates repairs, and reports results.
+**测试失败了？让它自己修。**
 
-智能测试自愈框架 — 自动检测测试失败、分类错误、生成修复补丁、验证修复、输出报告。
+SelfHeal 是一个智能测试自愈框架。自动检测测试失败 → 分类错误 → 生成修复补丁 → 验证修复 → 输出报告。支持纯本地规则引擎（免费），也支持接入 LLM（OpenAI/DeepSeek/Anthropic）做真正的代码修复。
 
-## Pipeline
+---
 
-```
-Watcher -> Classifier -> Patcher -> Validator -> Reporter
-                            |
-                          Store
-```
-
-## Features
-
-- **Multi-source watchers**: pytest executor, raw log parser, plugin hot-reload monitor
-- **Intelligent classification**: rule-based, LLM-powered, or hybrid (rule with LLM fallback)
-- **Automatic patching**: Jinja2 template engine, LLM-based code generation, experience reuse
-- **Multi-environment validation**: local pytest, Docker sandbox (isolated temp-copy)
-- **Flexible reporting**: terminal, GitHub Issues, webhook (Slack/Discord) with HMAC signing
-- **Persistent storage**: memory (dev) or SQLite (production)
-- **Plugin system**: hot-reload custom components, SHA256 integrity verification
-- **Safety-first**: backup/rollback, dry-run preview, auto_apply disabled by default
-
-## Installation
-
-Requires Python 3.10+.
+## 一分钟看懂
 
 ```bash
-pip install -e .              # base install
-pip install -e ".[dev]"       # test dependencies (pytest, vcrpy, ruff, mypy)
-pip install -e ".[llm]"       # LLM support (OpenAI, Anthropic, DeepSeek)
-pip install -e ".[docker]"    # Docker sandbox validation
-pip install -e ".[github]"    # GitHub Issues integration
-pip install -e ".[hotreload]" # watchdog for plugin hot-reload
+pip install selfheal
+
+# 给你的项目生成配置
+selfheal init
+
+# 让 SelfHeal 分析测试失败并生成修复
+python -m pytest tests/ --json-report --json-report-file=results.json
+python -m selfheal batch --input results.json --dry-run
 ```
 
-## Quick Start
+输出类似：
+
+```
+[Classification] Category: import, Severity: high
+[Generated Patch]
+--- a/config.py
++++ b/config.py
+-from pathlib import Pathh
++from pathlib import Path  # SelfHeal: fixed typo Pathh → Path
+```
+
+---
+
+## 两种模式
+
+| | 规则模式（默认，免费） | LLM 模式（需 API） |
+|------|-----|------|
+| **分类** | 正则匹配错误类型 | 理解 traceback 语义 |
+| **补丁** | 智能模板：修正 typo、加 import、类型转换、重试等 | 理解代码逻辑，生成真正的修复 |
+| **成本** | 0 | DeepSeek 约 0.01 元/次 |
+| **适合** | 快速见效，CI 自动兜底 | 真正想修 bug |
+
+**规则模式就够了** — typo 修正、import 补全、类型转换、重试、超时处理全都有。
+
+---
+
+## 安装
+
+Python 3.10+。
 
 ```bash
-# Generate default config
-python -m selfheal init
-
-# Watch tests and auto-heal on failure
-python -m selfheal watch -- pytest tests/
-
-# Process a single failure
-python -m selfheal classify --input failure.json
-python -m selfheal patch --input classification.json
-
-# Batch process failures
-python -m selfheal batch --input failures.json --auto-apply
-
-# Apply a generated patch to source
-python -m selfheal apply --input patch.json --auto-apply
-
-# Preview without modifying files
-python -m selfheal apply --input patch.json --dry-run
-
-# Rollback applied patches
-python -m selfheal rollback
-python -m selfheal rollback --all
-
-# Generate HTML dashboard
-python -m selfheal dashboard --output report.html
-
-# View metrics
-python -m selfheal metrics
-python -m selfheal metrics --json
-
-# Backup management
-python -m selfheal backups
-python -m selfheal cleanup --max-age 30
+pip install selfheal                    # 基础安装
+pip install selfheal[dev]               # 开发依赖（pytest 插件等）
+pip install selfheal[llm]               # LLM 支持（OpenAI/Anthropic）
+pip install selfheal[dashboard]         # 仪表板服务（Flask + gunicorn）
 ```
 
-## Configuration
+---
 
-`selfheal.yaml`:
-
-```yaml
-watcher:
-  type: pytest
-  path: tests/
-
-classifier:
-  type: rule          # rule | llm | hybrid
-  rules:
-    - pattern: "AssertionError"
-      category: assertion
-      severity: medium
-
-patcher:
-  type: template      # template | llm
-
-validator:
-  type: local         # local | docker
-  timeout: 300
-
-reporter:
-  type: terminal      # terminal | github | webhook
-
-store:
-  type: sqlite        # memory | sqlite
-  db_path: .selfheal/selfheal.db
-
-engine:
-  auto_apply: false   # safety: patches are generated but not applied
-  max_retries: 3
-  max_concurrency: 1
-
-pipeline:             # optional: customize pipeline stages
-  stages:
-    - type: classify
-    - type: patch
-      retry: 3
-    - type: validate
-    - type: report
-    - type: store
-```
-
-### LLM Configuration
-
-```yaml
-classifier:
-  type: llm
-  llm:
-    provider: openai                    # openai | anthropic | deepseek
-    model: gpt-4
-    api_key: ${OPENAI_API_KEY}          # env var resolution
-    temperature: 0.1
-```
-
-## Architecture
-
-| Component | Description |
-|-----------|-------------|
-| **Watcher** | Monitors test output (PytestWatcher, RawLogWatcher, PluginWatcher) |
-| **Classifier** | Categorizes errors by type & severity (RuleClassifier, LLMClassifier, HybridClassifier) |
-| **Patcher** | Generates fix patches (TemplatePatcher with Jinja2, LLMPatcher) |
-| **Validator** | Runs tests against patches (LocalValidator, DockerValidator with sandbox) |
-| **Reporter** | Reports results (TerminalReporter, GitHubReporter, WebhookReporter) |
-| **Store** | Persists event chains (MemoryStore, SQLiteStore) |
-| **Experience** | Reuses successful fixes from persistent SQLite store |
-| **PatchApplier** | Applies patches with automatic backup, rollback, and dry-run |
-| **Metrics** | Collects and reports pipeline statistics |
-| **Dashboard** | HTML dashboard with Chart.js visualizations |
-
-## Plugins
-
-Custom components are auto-discovered from the `plugins/` directory. Implement any interface, set `name`, and the plugin loader will register it:
-
-```python
-from selfheal.interfaces.classifier import ClassifierInterface
-from selfheal.events import TestFailureEvent, ClassificationEvent
-
-class MyClassifier(ClassifierInterface):
-    name = "my_classifier"
-
-    def classify(self, event: TestFailureEvent) -> ClassificationEvent:
-        ...
-```
-
-Plugins support hot-reloading with optional watchdog integration and SHA256 integrity verification.
-
-## Running Tests
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific module
-python -m pytest tests/ -v -k "test_engine"
-
-# Run VCR tests in replay mode (no API keys needed)
-CI=1 python -m pytest tests/test_llm_vcr.py -v
-
-# With coverage
-pip install pytest-cov
-python -m pytest tests/ --cov=src/selfheal --cov-report=html
-```
-
-## CI/CD
-
-### Jenkins
-
-See [`Jenkinsfile`](Jenkinsfile) — 5-stage pipeline: Setup, Run Tests, Self-Heal Repair, Retry Tests, Metrics Report.
+## 5 分钟接 CI
 
 ### GitHub Actions
 
-See [`.github/workflows/selfheal.yml`](.github/workflows/selfheal.yml).
+把下面内容放到 `.github/workflows/selfheal.yml`：
 
-## Project Structure
+```yaml
+name: SelfHeal
+on: [push, pull_request]
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install selfheal
+      - run: pip install -r requirements.txt  # 你的项目依赖
+      - run: python -m pytest tests/ --json-report --json-report-file=results.json || true
+      - shell: python
+        run: |
+          import json, subprocess
+          with open("results.json") as f:
+              report = json.load(f)
+          failures = [{"test_path": t["nodeid"], "error_type": "RuntimeError",
+                       "error_message": (t.get("call",{}).get("longrepr","") or "")[:500],
+                       "traceback": t.get("call",{}).get("longrepr","")}
+                      for t in report.get("tests",[]) if t["outcome"] in ("failed","error")]
+          if failures:
+              with open("failures.json","w") as f: json.dump(failures, f)
+              subprocess.run(["python","-m","selfheal","batch","--input","failures.json","--dry-run"])
+```
 
+推代码后，每次测试失败都会自动分析并生成修复建议。
+
+---
+
+## 配置
+
+```yaml
+# selfheal.yaml（可选，不写就用默认值）
+classifier:
+  type: rule              # rule | llm | hybrid
+
+patcher:
+  type: template          # template | llm
+  refine_rounds: 2        # LLM 多轮自审（仅 llm 模式生效）
+
+engine:
+  auto_apply: false       # 安全：不自动改代码
+  max_retries: 3
+
+# LLM 配置（可选，用 llm 模式才需要）
+classifier:
+  type: llm
+  llm:
+    provider: deepseek
+    model: deepseek-chat
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com
 ```
-selfheal/
-├── src/selfheal/
-│   ├── cli.py                 # CLI (12 subcommands)
-│   ├── config.py              # Pydantic v2 configuration
-│   ├── engine.py              # Pipeline orchestrator
-│   ├── events.py              # Event dataclasses
-│   ├── registry.py            # Component registry (singleton)
-│   ├── interfaces/            # Abstract interfaces
-│   │   ├── classifier.py
-│   │   ├── patcher.py
-│   │   ├── validator.py
-│   │   ├── reporter.py
-│   │   ├── store.py
-│   │   ├── watcher.py
-│   │   └── pipeline_stage.py
-│   └── core/                  # Concrete implementations
-│       ├── watchers/          # Pytest, RawLog, Plugin
-│       ├── classifiers/       # Rule, LLM, Hybrid
-│       ├── patchers/          # Template, LLM
-│       ├── validators/        # Local, Docker
-│       ├── reporters/         # Terminal, GitHub, Webhook
-│       ├── stores/            # Memory, SQLite
-│       ├── pipeline_stages/   # Classify, Patch, Validate, Report, Store
-│       ├── applier.py         # PatchApplier (backup, rollback, dry-run)
-│       ├── experience.py      # ExperienceStore (successful fix reuse)
-│       ├── cache.py           # LLM response cache
-│       ├── metrics.py         # MetricsCollector
-│       ├── hooks.py           # Hook system
-│       └── dashboard.py       # HTML dashboard generator
-├── tests/                     # 28 test files, 311+ tests
-├── patches/                   # Jinja2 patch templates (.j2)
-├── pyproject.toml
-├── Jenkinsfile
-└── selfheal.example.yaml
+
+---
+
+## 仪表板
+
+```bash
+selfheal dashboard --serve --port 8080 --open
 ```
+
+打开 `http://localhost:8080`，可以看到：
+- 修复统计（成功率、错误分类饼图、趋势图）
+- 补丁列表（按分类/状态筛选）
+- 点击任意补丁查看详情和 diff 预览
+- 一键 Apply / Rollback
+- 每 10 秒自动刷新
+
+---
+
+## CLI 全命令
+
+```bash
+selfheal init                        # 生成配置文件
+selfheal watch -- pytest tests/      # 监听测试
+selfheal classify --input err.json   # 分类单个错误
+selfheal patch --input cls.json      # 生成单个补丁
+selfheal validate --input patch.json # 验证补丁
+selfheal apply --input patch.json    # 应用补丁
+selfheal batch --input fails.json    # 批量处理
+selfheal rollback                    # 列出/回滚补丁
+selfheal metrics                     # 查看统计
+selfheal dashboard --serve           # 启动仪表板
+selfheal dashboard --output r.html   # 导出静态 HTML
+```
+
+---
+
+## 安全
+
+- `auto_apply` 默认关闭 — 补丁只生成不应用
+- 应用前自动备份到 `.selfheal/backups/`
+- 验证失败自动回滚
+- `--dry-run` 预览变更不修改文件
+- 插件 SHA256 完整性校验
+
+---
 
 ## License
 
