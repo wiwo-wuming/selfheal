@@ -101,14 +101,27 @@ def _parse_error_message(error_message: str, error_type: str) -> dict:
 
     if error_type in ("ImportError", "ModuleNotFoundError") and error_message:
         # "No module named 'foo'" -> extract 'foo'
-        match = re.search(r"No module named ['\"]?(\w+)", error_message)
+        match = re.search(r"No module named ['\"]?([\w.]+)", error_message)
         if match:
             detail["missing_module"] = match.group(1)
         else:
-            # "cannot import name 'foo' from 'bar'" -> extract 'foo'
-            match = re.search(r"cannot import name ['\"]?(\w+)", error_message)
+            # "cannot import name 'X' from 'Y'" -> extract X and Y
+            # Handles optional trailing punctuation like ". Did you mean: 'Z'?"
+            match = re.search(
+                r"cannot import name ['\"]?(\w+)['\"]?\s+from\s+['\"]?([\w.]+)",
+                error_message,
+            )
             if match:
                 detail["missing_module"] = match.group(1)
+                detail["source_module"] = match.group(2)
+
+        # "Did you mean: 'X'?" — typo correction hint from Python
+        hint_match = re.search(
+            r"Did you mean: ['\"]?(\w+)['\"]?\??",
+            error_message,
+        )
+        if hint_match:
+            detail["typo_suggestion"] = hint_match.group(1)
 
     return detail
 
@@ -250,6 +263,29 @@ class TemplatePatcher(PatcherInterface):
         category = classification.category
         templates_dir = self._templates_dir
 
+        # Import category: use smart typo-aware patch builder (bypass Jinja2)
+        if category == "import":
+            ctx = self._build_template_context(classification)
+            event = classification.original_event
+            tb_info = _parse_traceback(event.traceback)
+            err_info = _parse_error_message(event.error_message, event.error_type)
+            target_file = tb_info.get("error_file") or event.test_path
+            error_line = tb_info.get("error_line") or 1
+            original_code = tb_info.get("original_code") or ""
+            content = self._build_import_patch(
+                str(target_file), error_line, original_code,
+                err_info.get("typo_suggestion"),
+                err_info.get("missing_module", "unknown_module"),
+                err_info.get("source_module"),
+            )
+            return PatchEvent(
+                classification_event=classification,
+                patch_id=str(uuid.uuid4()),
+                patch_content=content,
+                generator="template",
+                target_file=ctx.get("target_file"),
+            )
+
         # Look for template in category subdirectory
         template_path = templates_dir / category / "default.py.j2"
 
@@ -353,6 +389,61 @@ class TemplatePatcher(PatcherInterface):
             logger.debug("Fallback experience lookup skipped", exc_info=True)
         return None
 
+    @staticmethod
+    def _build_import_patch(
+        target_file: str,
+        error_line: int,
+        original_code: str,
+        typo_suggestion: Optional[str],
+        missing_module: str,
+        source_module: Optional[str],
+    ) -> str:
+        """Build a context-aware import patch.
+
+        Three strategies (in order of preference):
+
+        1. **Typo fix**: if ``typo_suggestion`` is present, fix the typo
+           in the original import line (e.g. ``import Pathh`` → ``import Path``).
+
+        2. **Missing sub-module**: if ``source_module`` is present, add
+           ``from source import missing``.
+
+        3. **Missing top-level**: add ``import missing_module``.
+        """
+        # Strategy 1: typo correction — fix the existing import line
+        if typo_suggestion and original_code:
+            fixed_line = re.sub(
+                rf"\b{re.escape(missing_module)}\b",
+                typo_suggestion,
+                original_code,
+                count=1,
+            )
+            return (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -{error_line},1 +{error_line},1 @@\n"
+                f"-{original_code}\n"
+                f"+{fixed_line}  # SelfHeal: fixed typo {missing_module} → {typo_suggestion}\n"
+            )
+
+        # Strategy 2: sub-module import
+        if source_module:
+            return (
+                f"--- a/{target_file}\n"
+                f"+++ b/{target_file}\n"
+                f"@@ -1,0 +1,2 @@\n"
+                f"+from {source_module} import {missing_module}  "
+                f"# SelfHeal: added missing import\n"
+            )
+
+        # Strategy 3: bare import
+        return (
+            f"--- a/{target_file}\n"
+            f"+++ b/{target_file}\n"
+            f"@@ -1,0 +1,2 @@\n"
+            f"+import {missing_module}  # SelfHeal: added missing import\n"
+        )
+
     def _generate_fallback_patch(self, classification: ClassificationEvent) -> tuple[str, Optional[str]]:
         """Generate an executable fallback patch when no template is found.
 
@@ -385,10 +476,12 @@ class TemplatePatcher(PatcherInterface):
                 f"+{original_code}  # SelfHeal: fix assertion — verify expected vs actual\n"
             ),
             "import": (
-                f"--- a/{target_file}\n"
-                f"+++ b/{target_file}\n"
-                f"@@ -1,0 +1,2 @@\n"
-                f"+import {err_info.get('missing_module', 'unknown_module')}\n"
+                self._build_import_patch(
+                    target_file, error_line, original_code,
+                    err_info.get("typo_suggestion"),
+                    err_info.get("missing_module", "unknown_module"),
+                    err_info.get("source_module"),
+                )
             ),
             "type": (
                 f"--- a/{target_file}\n"

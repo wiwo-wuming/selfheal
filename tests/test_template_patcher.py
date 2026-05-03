@@ -221,9 +221,10 @@ class TestTemplatePatcherGenerate:
         patch = patcher.generate(import_event)
         assert patch.target_file is not None
 
-    def test_import_template_includes_importorskip(self, patcher, import_event):
+    def test_import_template_adds_import(self, patcher, import_event):
         patch = patcher.generate(import_event)
-        assert "importorskip" in patch.patch_content
+        assert "import" in patch.patch_content.lower()
+        assert "numpy" in patch.patch_content
 
     def test_fallback_for_unknown_category(self):
         """Categories without a template fall back to _generic.py.j2."""
