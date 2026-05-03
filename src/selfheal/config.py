@@ -207,6 +207,7 @@ class PatcherConfig(BaseModel):
     type: str = "template"
     templates_dir: str = "patches/"
     llm: Optional[LLMConfig] = None
+    refine_rounds: int = 2  # LLM multi-round self-refinement (1 = single pass)
 
 
 class ValidatorConfig(BaseModel):

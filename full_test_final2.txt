@@ -1,0 +1,40 @@
+........................................................................ [ 20%]
+........................................................................ [ 40%]
+........................................................................ [ 61%]
+........................................................................ [ 81%]
+.......................................FFF.....F.................        [100%]
+================================== FAILURES ===================================
+E   AssertionError: Expected diff header, got: # fix
+    assert False
+     +  where False = <built-in method startswith of str object at 0x0000026FD2F35FE0>('--- a/')
+     +    where <built-in method startswith of str object at 0x0000026FD2F35FE0> = '# fix'.startswith
+c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\tests\test_template_patcher.py:195: AssertionError: Expected diff header, got: # fix
+E   AssertionError: assert None is not None
+     +  where None = PatchEvent(classification_event=ClassificationEvent(original_event=TestFailureEvent(test_path='tests/test_foo.py', err...='experience(template)', target_file=None, backup_path=None, status='generated', applied_at=None, suggested_command='').target_file
+c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\tests\test_template_patcher.py:201: AssertionError: assert None is not None
+E   AssertionError: assert 'experience(template)' == 'template'
+      
+      - template
+      + experience(template)
+c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\tests\test_template_patcher.py:207: AssertionError: assert 'experience(template)' == 'template'
+E   AssertionError: Category 'assertion' did not produce diff header
+    assert '--- a/' in '# fix'
+     +  where '# fix' = PatchEvent(classification_event=ClassificationEvent(original_event=TestFailureEvent(test_path='tests/test_assertion.py...='experience(template)', target_file=None, backup_path=None, status='generated', applied_at=None, suggested_command='').patch_content
+c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\tests\test_template_patcher.py:282: AssertionError: Category 'assertion' did not produce diff header
+============================== warnings summary ===============================
+tests/test_engine_full.py: 5 warnings
+tests/test_engine_plugin_integration.py: 3 warnings
+tests/test_experience.py: 5 warnings
+tests/test_integration_full.py: 1 warning
+tests/test_pipeline_e2e.py: 24 warnings
+tests/test_validate_stage.py: 2 warnings
+  c:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\src\selfheal\core\experience.py:121: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    conn.execute(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_generates_unified_diff_format
+FAILED tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_sets_target_file_from_traceback
+FAILED tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_sets_generator_to_template
+FAILED tests/test_template_patcher.py::TestTemplatePatcherGenerate::test_all_categories_produce_valid_diff
+4 failed, 349 passed, 40 warnings in 110.09s (0:01:50)

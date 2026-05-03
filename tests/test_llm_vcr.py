@@ -249,6 +249,7 @@ class TestAnthropicPatcherVCR:
                 api_key="${ANTHROPIC_API_KEY}",
                 temperature=0.2,
             ),
+            refine_rounds=1,  # VCR cassette only has single round recorded
         )
         self._cls = ClassificationEvent(
             original_event=_make_failure("AssertionError", "assert add(1, 2) == 4"),
@@ -313,6 +314,7 @@ class TestLLMPatcherVCR:
                 base_url="https://api.deepseek.com/v1",
                 temperature=0.2,
             ),
+            refine_rounds=1,  # VCR cassette only has single round recorded
         )
         # Create a sample classification for the patcher context
         self._cls = ClassificationEvent(

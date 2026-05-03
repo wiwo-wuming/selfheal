@@ -1,4 +1,4 @@
-"""LLM-based patcher implementation."""
+"""LLM-based patcher with multi-round self-refinement."""
 
 import logging
 import uuid
@@ -10,14 +10,32 @@ from selfheal.interfaces.patcher import PatcherInterface
 
 logger = logging.getLogger(__name__)
 
+# Multi-round refinement: generate -> self-review -> refine
+_DEFAULT_REFINE_ROUNDS = 2         # total rounds (generate + refine)
+_MAX_REFINE_ROUNDS = 5             # safety cap
+
 
 class LLMPatcher(PatcherInterface):
-    """LLM-based intelligent patch generator."""
+    """LLM-based intelligent patch generator with multi-round self-refinement.
+
+    When ``refine_rounds`` is set (default 2), the patcher performs a
+    generate → self-review → refine loop.  The LLM first generates a
+    patch, then re-reads its own output as a reviewer looking for bugs,
+    and finally produces an improved patch.
+
+    This feedback mechanism is entirely prompt-based — no test execution
+    is needed.  The pipeline-level ``PatchStage`` still handles the
+    traditional retry-on-apply-failure loop.
+    """
 
     def __init__(self, config: PatcherConfig):
         self.config = config
         self.llm_config: Optional[LLMConfig] = config.llm
         self._client: Optional[Any] = None
+        self.refine_rounds = min(
+            max(getattr(config, "refine_rounds", _DEFAULT_REFINE_ROUNDS), 1),
+            _MAX_REFINE_ROUNDS,
+        )
 
     name = "llm"
 
@@ -52,21 +70,44 @@ class LLMPatcher(PatcherInterface):
         return self._client
 
     def generate(self, classification: ClassificationEvent) -> PatchEvent:
-        """Generate a patch using LLM."""
+        """Generate a patch with optionally multiple refinement rounds.
+
+        Round 1: generate initial patch.
+        Round 2..N: self-review → refine using feedback.
+        """
         if not self.llm_config:
             raise ValueError("LLM not configured")
 
-        prompt = self._build_prompt(classification)
-
         try:
+            # --- Round 1: initial generation ---
+            prompt = self._build_prompt(classification)
             response = self._call_llm(prompt)
             content = self._extract_code(response)
+
+            if self.refine_rounds <= 1:
+                return PatchEvent(
+                    classification_event=classification,
+                    patch_id=str(uuid.uuid4()),
+                    patch_content=content,
+                    generator="llm",
+                )
+
+            # --- Rounds 2..N: self-review + refine ---
+            for round_num in range(2, self.refine_rounds + 1):
+                logger.info(f"LLM self-refine round {round_num}/{self.refine_rounds}")
+                review_prompt = self._build_review_prompt(classification, content)
+                review_response = self._call_llm(review_prompt)
+                refined = self._extract_code(review_response)
+                if refined and refined != content:
+                    content = refined
+                else:
+                    logger.debug("Refine round produced no change, keeping previous patch")
 
             return PatchEvent(
                 classification_event=classification,
                 patch_id=str(uuid.uuid4()),
                 patch_content=content,
-                generator="llm",
+                generator=f"llm(refined_{self.refine_rounds}r)",
             )
         except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
             logger.error(f"LLM patch generation failed: {e}")
@@ -78,25 +119,58 @@ class LLMPatcher(PatcherInterface):
             )
 
     def _build_prompt(self, classification: ClassificationEvent) -> str:
-        """Build patch generation prompt."""
+        """Build the initial patch generation prompt."""
         event = classification.original_event
 
-        return f"""Generate a fix for the following test failure.
+        return f"""You are a senior Python developer fixing a broken test.
 
-Test: {event.test_path}
-Error Type: {event.error_type}
-Error Message: {event.error_message}
+Test path: {event.test_path}
+Error type: {event.error_type}
+Error message: {event.error_message}
 Category: {classification.category}
 Severity: {classification.severity.value}
 
 Traceback:
 {event.traceback}
 
-Generate a patch that fixes this issue. Respond with:
-1. Brief explanation of the fix
-2. The complete code patch
+Analyze the traceback to find the **root cause in the source code** (not the test file).
+Then generate a unified-diff patch that fixes the source code.
 
-Code should be well-formatted and follow best practices."""
+Rules:
+- Output ONLY the unified diff patch inside ```diff ... ``` fences.
+- The patch MUST change the source code under test, NOT the test file itself.
+- Do NOT use pytest.skip / pytest.xfail / try-except to hide the error.
+- If an import is missing, add it. If a function signature is wrong, fix it.
+- If a value is incorrect, correct it based on the error message.
+- Include a brief explanation BEFORE the diff."""
+
+    def _build_review_prompt(
+        self, classification: ClassificationEvent, current_patch: str
+    ) -> str:
+        """Build a self-review prompt that asks the LLM to critique its own patch."""
+        event = classification.original_event
+
+        return f"""You are a senior code reviewer. Review the following patch that was
+generated to fix a test failure, then produce an IMPROVED version.
+
+=== ORIGINAL ERROR ===
+Test: {event.test_path}
+Error type: {event.error_type}
+Error message: {event.error_message}
+Category: {classification.category}
+Traceback:
+{event.traceback[:800]}
+
+=== CURRENT PATCH (to review) ===
+{current_patch}
+
+=== REVIEW TASK ===
+1. Does this patch actually fix the root cause? If not, what is missing?
+2. Could it break anything else?
+3. Is there a simpler or more correct fix?
+
+Then produce the IMPROVED unified-diff patch inside ```diff ... ``` fences.
+Output ONLY the diff patch, no extra commentary."""
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM API."""
@@ -121,16 +195,20 @@ Code should be well-formatted and follow best practices."""
         else:
             raise ValueError(f"Unknown LLM provider: {provider}")
 
-    def _extract_code(self, response: str) -> str:
+    @staticmethod
+    def _extract_code(response: str) -> str:
         """Extract code from LLM response."""
         import re
 
-        # Try to extract code blocks
-        code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", response, re.DOTALL)
+        # Try diff fence first
+        diff_blocks = re.findall(r"```diff\n(.*?)```", response, re.DOTALL)
+        if diff_blocks:
+            return max(diff_blocks, key=len).strip()
 
+        # Then any code fence
+        code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", response, re.DOTALL)
         if code_blocks:
-            # Return the largest code block
             return max(code_blocks, key=len).strip()
 
-        # If no code blocks, return full response with explanation
+        # Fallback: return full response stripped
         return response.strip()

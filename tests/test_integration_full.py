@@ -254,7 +254,7 @@ class TestLLMPatcherFullIntegration:
         result = patcher.generate(classification)
 
         assert "import sqlite3" in result.patch_content
-        assert result.generator == "llm"
+        assert result.generator.startswith("llm")
 
     def test_generate_patch_with_no_code_blocks(self):
         """Returns full response text when no code blocks found."""

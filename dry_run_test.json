@@ -1,0 +1,8 @@
+[
+  {
+    "test_path": "tests/test_math.py::test_addition",
+    "error_type": "AssertionError",
+    "error_message": "assert 2 + 2 == 5",
+    "traceback": "E   assert 4 == 5"
+  }
+]
