@@ -283,10 +283,37 @@ class ExperienceStore:
         # Load metrics history for trend chart
         trend = self.get_metrics_history(days=30)
 
-        # Build category breakdown for doughnut chart from latest snapshot
-        category_breakdown = {}
-        if trend:
-            category_breakdown = trend[-1].get("category_breakdown", {})
+        # Build category breakdown from experiences table as fallback
+        cats = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM experiences "
+            "GROUP BY category ORDER BY cnt DESC"
+        ).fetchall()
+        category_breakdown = {r["category"]: r["cnt"] for r in cats}
+
+        # If no snapshots exist, fabricate two data points: a zero baseline
+        # and current state so the trend chart has something to draw.
+        if not trend:
+            today = datetime.now().strftime("%Y-%m-%d")
+            trend = [
+                {
+                    "snapshot_date": "start",
+                    "total_experiences": 0,
+                    "unique_signatures": 0,
+                    "total_successes": 0,
+                    "pipeline_runs": 0,
+                    "avg_pipeline_time": 0.0,
+                    "category_breakdown": {},
+                },
+                {
+                    "snapshot_date": today,
+                    "total_experiences": total,
+                    "unique_signatures": unique,
+                    "total_successes": total_successes,
+                    "pipeline_runs": 0,
+                    "avg_pipeline_time": 0.0,
+                    "category_breakdown": category_breakdown,
+                },
+            ]
 
         return {
             "total_experiences": total,
