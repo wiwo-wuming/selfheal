@@ -1,288 +1,229 @@
 # SelfHeal 项目交接文档
 
-> 生成日期：2026-05-02  
-> 项目路径：`C:\Users\longhuihai\CodeBuddy\20260430210042\代码自迭代功能项目\selfheal\`  
-> 版本：v0.1.0 (Alpha)
+> 生成日期：2026-05-04  
+> 版本：v0.3.0  
+> 仓库：https://github.com/wiwo-wuming/selfheal
 
 ---
 
 ## 一、项目概述
 
-**SelfHeal** 是一个智能测试自愈框架，核心能力是：**自动检测测试失败 → 分类错误 → 生成修复补丁 → 验证修复 → 输出报告**。
+SelfHeal 是一个智能测试自愈框架。自动检测测试失败 → 分类错误 → 生成修复补丁 → 验证修复 → 输出报告。
 
-### 核心流程
+**核心能力**：规则引擎（免费）+ LLM 引擎（可接 API），策略失败自动切换。
+
+---
+
+## 二、架构
 
 ```
 Watcher → Classifier → Patcher → Validator → Reporter
-  监视      分类        修补      验证       报告
-                 ↓
-              Store（持久化存储）
+  监视       分类         修补       验证        报告
+                           ↓
+                     Store / Experience
 ```
 
-### 技术栈
+每个阶段都是可插拔的 Pipeline Stage，用户可自定义顺序和组件。
 
-| 类别 | 技术 |
+### 核心模块
+
+| 文件 | 职责 |
 |------|------|
-| 语言 | Python 3.10+ |
-| 配置管理 | YAML + Pydantic v2 |
-| CLI | Click |
-| 模板引擎 | Jinja2 |
-| 存储 | SQLite / 内存 |
-| 可选集成 | OpenAI / Anthropic / DeepSeek (LLM), Docker, GitHub |
-| 测试框架 | pytest + pytest-asyncio + vcrpy |
-| CI/CD | Jenkins (Jenkinsfile) |
+| `src/selfheal/engine.py` | 核心引擎，Pipeline 编排，Hook 系统，策略切换 |
+| `src/selfheal/cli.py` | 12 个子命令：watch/classify/patch/validate/report/batch/apply/rollback/backups/cleanup/metrics/dashboard/init |
+| `src/selfheal/config.py` | Pydantic v2 配置模型，环境变量 ${ENV} 解析 |
+| `src/selfheal/events.py` | 事件数据类：TestFailureEvent → ClassificationEvent → PatchEvent → ValidationEvent |
+| `src/selfheal/registry.py` | 组件注册表（单例） |
+
+### 核心实现
+
+| 目录 | 内容 |
+|------|------|
+| `core/watchers/` | PytestWatcher, RawLogWatcher, PluginWatcher |
+| `core/classifiers/` | RuleClassifier（正则）, LLMClassifier（API）, HybridClassifier（规则+LLM 降级） |
+| `core/patchers/` | TemplatePatcher（Jinja2+智能 typo 修复）, LLMPatcher（多轮 self-refine+质量评分） |
+| `core/validators/` | LocalValidator（pytest）, DockerValidator（沙箱） |
+| `core/reporters/` | TerminalReporter, GitHubReporter, WebhookReporter（HMAC 签名） |
+| `core/stores/` | MemoryStore, SQLiteStore |
+| `core/applier.py` | PatchApplier：备份/应用/回滚/干跑/清理 |
+| `core/experience.py` | ExperienceStore：成功修复 SQLite 持久化+复用 |
+| `core/cache.py` | LLM 响应缓存（带 TTL） |
+| `core/metrics.py` | 指标收集 |
+| `core/hooks.py` | Hook 系统（MetricsHook） |
+| `core/dashboard.py` | HTML 仪表板（纯 Canvas 图表） |
+| `core/dashboard_server.py` | Flask 仪表板服务器（支持 gunicorn） |
+| `plugins/loader.py` | 插件热加载（SHA256 完整性校验） |
 
 ---
 
-## 二、目录结构
+## 三、三大核心特性
+
+### 1. 三层质量保障
+
+| 层 | 机制 | 文件 |
+|---|------|------|
+| 质量检查 | 检测补丁中 pass/skip/xfail/importorskip，标记 low_quality | `patch_stage.py:_check_patch_quality()` |
+| LLM 自审 | LLM 补丁生成后打分 0-10，低于阈值(默认4)拒绝 | `llm_patcher.py:_score_patch()` |
+| 全量回归 | 修补后跑全量测试，不单文件 | `local_validator.py:_build_test_command()` |
+
+### 2. 策略自动切换（Strategy Fallback）
 
 ```
-selfheal/
-├── src/selfheal/                 # 源代码
-│   ├── cli.py                    # 命令行入口（watch/classify/patch/validate/report/batch/rollback/backups/cleanup/metrics/dashboard/init）
-│   ├── config.py                 # 配置模型（Pydantic）
-│   ├── engine.py                 # 核心引擎（Pipeline 编排、Hook 系统、回滚）
-│   ├── events.py                 # 事件定义（TestFailureEvent → ClassificationEvent → PatchEvent → ValidationEvent）
-│   ├── registry.py               # 组件注册表（全局单例）
-│   │
-│   ├── interfaces/               # 抽象接口
-│   │   ├── classifier.py         # ClassifierInterface
-│   │   ├── patcher.py            # PatcherInterface
-│   │   ├── validator.py          # ValidatorInterface
-│   │   ├── reporter.py           # ReporterInterface
-│   │   ├── store.py              # StoreInterface
-│   │   ├── watcher.py            # WatcherInterface
-│   │   └── pipeline_stage.py     # PipelineStage（ABC）
-│   │
-│   ├── core/                     # 核心实现
-│   │   ├── watchers/             # PytestWatcher, RawLogWatcher, PluginWatcher
-│   │   ├── classifiers/          # RuleClassifier, LLMClassifier, HybridClassifier
-│   │   ├── patchers/             # TemplatePatcher, LLMPatcher
-│   │   ├── validators/           # LocalValidator, DockerValidator
-│   │   ├── reporters/            # TerminalReporter, GitHubReporter, WebhookReporter
-│   │   ├── stores/               # MemoryStore, SQLiteStore
-│   │   ├── pipeline_stages/      # ClassifyStage, PatchStage, ValidateStage, ReportStage, StoreStage
-│   │   ├── applier.py            # PatchApplier（差量/全量应用、备份、回滚、干跑）
-│   │   ├── experience.py         # ExperienceStore（成功修复经验 SQLite 持久化）
-│   │   ├── cache.py              # LLMResponseCache（带 TTL 的内存缓存）
-│   │   ├── metrics.py            # MetricsCollector
-│   │   ├── hooks.py              # Hook（MetricsHook）
-│   │   └── dashboard.py          # HTML Dashboard 生成器
-│   │
-│   ├── plugins/                  # 插件热加载
-│   │   └── loader.py             # PluginLoader（支持热重载）
-│   │
-│   └── patches/                  # Jinja2 补丁模板 (.j2)
-│
-├── tests/                        # 测试套件（26 个测试文件）
-├── docs/                         # 文档
-├── pyproject.toml                # 项目配置
-├── Jenkinsfile                   # CI/CD 流水线
-├── selfheal.example.yaml         # 配置示例
-└── runtests.py                   # 简易测试运行器
+Template patcher 生成补丁 → 验证失败 → 自动切 LLM patcher 重试
 ```
 
----
+配置：`engine.strategy_fallback: true` + `patcher.llm: ...`
 
-## 三、架构设计要点
+### 3. Template Patcher 智能补丁
 
-### 3.1 Pipeline 模式
-
-引擎 (`SelfHealEngine`) 采用可插拔的 Pipeline 架构：
-
-```python
-# 默认 Pipeline: classify → patch(含重试) → validate → report → store
-# 可通过 selfheal.yaml 的 pipeline.stages 自定义
-```
-
-每个 Stage 继承 `PipelineStage` 抽象类，通过 `context` 字典传递中间结果：
-- `context["event"]` → `TestFailureEvent`
-- `context["classification"]` → `ClassificationEvent`
-- `context["patches"]` → `list[PatchEvent]`
-- `context["final_validation"]` → `ValidationEvent`
-
-### 3.2 组件注册表
-
-- 全局 Singleton `Registry`，按 `(category, name)` 注册组件类
-- 默认组件在 `core/__init__.py` 的 `register_defaults()` 中注册
-- 第三方插件通过 `PluginLoader` 自动发现并注册
-
-### 3.3 Hook 系统
-
-- `Hook` 抽象类，提供 `before_stage()` / `after_stage()` 回调
-- 内置 `MetricsHook`：记录每阶段耗时
-- Hook 失败不影响 Pipeline（仅日志记录）
-
-### 3.4 经验学习
-
-- `ExperienceStore`：成功的修复补丁按错误签名存储在 SQLite 中
-- 下次遇到相似错误时，`TemplatePatcher` 优先复用历史成功补丁
-- `cache.py` 提供独立的 LLM 响应缓存
-
-### 3.5 安全机制
-
-- `auto_apply` 默认关闭，补丁仅生成不应用
-- 应用前自动备份原始文件到 `.selfheal/backups/`
-- 验证失败时自动回滚已应用的补丁
-- `rollback` CLI 支持手动回滚
-- 插件完整性校验（SHA256 checksum）
-- Dry-run 模式预览变更
+| 错误类型 | 修复策略 |
+|---------|---------|
+| typo import (`Pathh→Path`) | 正则匹配 Did you mean 提示，修正拼写 |
+| 缺失 import | `import module` |
+| 子模块 import | `from module import name` |
+| TypeError | `str()` 类型转换 |
+| NetworkError | 3 重试 + 指数退避 |
+| MemoryError | `islice` 分批 |
+| flaky test | `@pytest.mark.flaky` |
+| 运行时错误 | try-except 防护 |
+| 断言不匹配 | 标记注释 |
 
 ---
 
-## 四、已知问题（全部已修复 ✅）
-
-> 修复日期：2026-05-02
-
-| # | 严重度 | 文件 | 问题 | 修复方式 |
-|---|--------|------|------|----------|
-| 1 | 🔴 | `core/experience.py` | `prune()` 忽略 `max_age_days` 参数 | 改用 `timedelta(days=max_age_days)` 正确计算截止日期 |
-| 2 | 🔴 | `core/patchers/template_patcher.py` | fallback patch 中 `\\n` 转义错误 | 改为 f-string 多行字符串，换行符正确 |
-| 3 | 🔴 | `core/applier.py` | `list_backups()` 路径推断错误 | 修复 `target_name` 后缀丢失 + 路径层级修正为 3 级 |
-| 4 | 🟡 | `Jenkinsfile` | 修复后测试通过未重置 CI 状态 | 显式设置 `currentBuild.result = 'SUCCESS'` / `'FAILURE'` |
-| 5 | 🟡 | `core/pipeline_stages/validate_stage.py` | 硬编码 severity/confidence | 从实际 classification 对象读取 |
-| 6 | 🟡 | `cache.py` + `experience.py` | `_make_error_signature()` 重复定义 | 移除重复函数 |
-| 7 | 🟡 | `core/dashboard.py` | 调用私有方法 `_get_conn()` | 新增公共方法 `dashboard_data()` 替代 |
-| 8 | 🟢 | `core/pipeline_stages/patch_stage.py` | metric 记录不一致 | 非 auto_apply 模式改为记录实际生成结果 `"generated"` |
-| 9 | 🟢 | `core/watchers/plugin_watcher.py` | 文件末尾多余空行 | 清理空白行 |
-| 10 | 🟢 | `core/pipeline_stages/classify_stage.py` | f-string 日志 | 改为 `%s` 延迟求值 |
-
----
-
-## 五、快速开始
-
-### 安装
+## 四、仪表板
 
 ```bash
-cd selfheal
-pip install -e .              # 基础安装
-pip install -e ".[dev]"       # 含测试依赖
-pip install -e ".[llm]"       # 含 LLM 支持
-pip install -e ".[docker]"    # 含 Docker 验证
-pip install -e ".[github]"    # 含 GitHub 集成
+# 静态导出
+python -m selfheal dashboard --output report.html
+
+# 交互式服务器
+python -m selfheal dashboard --serve --port 8080 --open
+
+# 生产模式
+python -m selfheal dashboard --serve --production
 ```
 
-### 运行测试
+### 仪表板功能
 
-```bash
-python runtests.py                  # 运行全部测试
-python -m pytest tests/ -v          # 详细输出
-python -m pytest tests/ -v -k "test_engine"  # 运行特定测试
-```
+- KPI 卡片（Total Fixes / Unique Errors / Successes / Pipeline Runs / Success Rate）
+- 纯 Canvas 手绘折线图（趋势，渐变填充）
+- 纯 Canvas 手绘环形图（分类分布，中心数字+右侧图例）
+- 补丁列表（按分类/状态筛选，斑马纹，行点击）
+- 弹窗查看补丁详情 + Apply / Rollback 一键操作
+- 10 秒自动刷新 + LIVE 指示灯
+- 入场动画（卡片依次淡入）
+- 响应式（640px / 900px 断点）
+- 深色主题 + CSS 变量配色
 
-### 初始化配置
+### API 端点
 
-```bash
-python -m selfheal init              # 生成 selfheal.yaml
-```
-
-### 使用 CLI
-
-```bash
-python -m selfheal watch -- pytest tests/      # 监视测试
-python -m selfheal classify --rule error.log   # 分类错误
-python -m selfheal batch --input failures.json --auto-apply  # 批量修复
-python -m selfheal rollback                     # 列出可回滚补丁
-python -m selfheal rollback --all               # 回滚全部补丁
-python -m selfheal dashboard --output report.html  # 生成仪表板
-python -m selfheal metrics --json               # 输出指标
-```
-
-### CI 集成（Jenkins）
-
-Pipeline 分为 5 个阶段：
-1. **Setup** — 检出代码、安装依赖
-2. **Run Tests** — 运行测试套件
-3. **Self-Heal Repair** — 仅在测试失败时触发，调用 `batch --auto-apply`
-4. **Retry Tests** — 重新运行测试验证修复
-5. **Metrics Report** — 生成并归档指标文件
-
-需要配置 Jenkins credential：`openai-api-key`（用于 LLM 修复）。
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/api/stats` | GET | 统计数据 |
+| `/api/patches` | GET | 补丁列表（支持 category/status 筛选） |
+| `/api/patches/:id/apply` | POST | 应用补丁 |
+| `/api/patches/:id/rollback` | POST | 回滚补丁 |
 
 ---
 
-## 六、配置说明
+## 五、测试
 
-`selfheal.yaml` 核心配置项：
+```bash
+# 全量测试（不含 benchmark）
+python -m pytest tests/ -k "not test_bench"
+
+# VCR 回放模式（不需要 API key）
+CI=1 python -m pytest tests/test_llm_vcr.py -v
+```
+
+**当前状态：400 passed, 6 skipped, 0 failed**
+
+---
+
+## 六、CI 集成
+
+### GitHub Actions
 
 ```yaml
-watcher:
-  type: pytest          # pytest | raw_log
-  path: tests/
+# 在目标项目 .github/workflows/selfheal.yml
+- run: pip install selfheal
+- run: python -m pytest tests/ --json-report --json-report-file=results.json || true
+- shell: python
+  run: |
+    import json, subprocess
+    # 从 results.json 提取 failures → failures.json
+    subprocess.run(["python","-m","selfheal","batch","--input","failures.json","--dry-run"])
+```
 
+### Jenkins
+
+见 `Jenkinsfile`：5 阶段 pipeline（Setup → Run Tests → Self-Heal Repair → Retry Tests → Metrics Report）
+
+---
+
+## 七、配置示例
+
+```yaml
+# selfheal.yaml
 classifier:
-  type: rule            # rule | llm | hybrid
-  rules:                # 规则分类器的自定义规则
-    - pattern: "AssertionError"
-      category: assertion
-      severity: medium
+  type: hybrid          # rule → free; LLM fallback for ambiguous
+  llm:
+    provider: deepseek
+    model: deepseek-chat
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com
 
 patcher:
-  type: template        # template | llm
-  templates_dir: patches/
-
-validator:
-  type: local           # local | docker
-  timeout: 300
-
-reporter:
-  type: terminal        # terminal | github | webhook
-
-store:
-  type: sqlite          # memory | sqlite
-  db_path: .selfheal/selfheal.db
+  type: template        # free
+  llm:                  # fallback on template failure
+    provider: deepseek
+    model: deepseek-chat
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com
+  refine_rounds: 2      # LLM 多轮自审
+  quality_threshold: 4  # LLM 补丁最低质量分(0-10)
 
 engine:
-  auto_apply: false     # 是否自动应用补丁
-  dry_run: false        # 干跑模式
-  max_retries: 3        # 最大重试次数
-  max_concurrency: 1    # 并发数（>1 启用 asyncio）
+  auto_apply: false     # 安全：不自动修改源文件
+  strategy_fallback: true # 失败时切 LLM
+  max_retries: 3
 
-pipeline:               # 可自定义 Pipeline 阶段
-  stages:
-    - type: classify
-    - type: patch
-      retry: 3
-    - type: validate
-    - type: report
-    - type: store
+validator:
+  type: local
 ```
 
 ---
 
-## 七、扩展开发
+## 八、依赖
 
-### 添加自定义组件
-
-1. 实现对应接口（`ClassifierInterface` / `PatcherInterface` 等）
-2. 设置类属性 `name`
-3. 放入 `plugins/` 目录，插件加载器会自动发现和注册
-
-```python
-from selfheal.interfaces.classifier import ClassifierInterface
-from selfheal.events import TestFailureEvent, ClassificationEvent
-
-class MyClassifier(ClassifierInterface):
-    name = "my_classifier"
-    
-    def classify(self, event: TestFailureEvent) -> ClassificationEvent:
-        # 实现分类逻辑
-        pass
-```
-
-### 添加自定义 Pipeline 阶段
-
-继承 `PipelineStage` 并设置 `name` 属性，放入 `plugins/` 目录即可被自动发现。
+| 分类 | 包 |
+|------|----|
+| 核心 | click, pyyaml, pydantic>=2.0, jinja2 |
+| 可选-LLM | openai, anthropic |
+| 可选-仪表板 | flask, gunicorn |
+| 可选-插件热加载 | watchdog |
+| 可选-Docker | docker |
+| 可选-GitHub | PyGithub |
+| 开发 | pytest, pytest-asyncio, pytest-benchmark, pytest-json-report, vcrpy, ruff, mypy |
 
 ---
 
-## 八、联系人
+## 九、已知局限
 
-- 项目地址：`https://github.com/wiwo-wuming/selfheal`
-- 许可证：MIT
-- 版本：v0.1.0 (Alpha)
+1. **Windows GBK 编码** — subprocess 中文本输出编码问题，已在 `local_validator.py` 加 `PYTHONIOENCODING=utf-8` 缓解，Linux/CI 无此问题
+2. **Template patcher 边界** — 复杂逻辑 bug（非 typo/import/类型错误）修不准，需 LLM 兜底
+3. **多语言** — 仅支持 Python/pytest
 
 ---
 
-> **交接人**：longhuihai  
-> **日期**：2026-05-02
+## 十、移交清单
+
+| 项 | 位置 |
+|----|------|
+| 源码 | `src/selfheal/` |
+| 测试 | `tests/` (28 个测试文件) |
+| CI 配置 | `Jenkinsfile` + `.github/workflows/selfheal.yml` |
+| README | `README.md` |
+| 交接文档 | `HANDOVER.md`（本文件） |
+| 仓库 | https://github.com/wiwo-wuming/selfheal |
+| PyPI | 待发布（`dist/` 目录已 build） |
