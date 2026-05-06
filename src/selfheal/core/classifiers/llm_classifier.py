@@ -1,11 +1,17 @@
 """LLM-based classifier implementation."""
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from selfheal.config import ClassifierConfig, LLMConfig
 from selfheal.events import TestFailureEvent, ClassificationEvent, ErrorSeverity
 from selfheal.interfaces.classifier import ClassifierInterface
+from selfheal.core.llm_client import (
+    call_structured,
+    CLASSIFY_TOOL,
+    LLMResponse,
+    LLMError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,42 +28,11 @@ class LLMClassifier(ClassifierInterface):
         self.llm_config: Optional[LLMConfig] = None
         if config.llm:
             self.llm_config = config.llm
-        self._client: Optional[Any] = None
         # Cache integration
         self._cache_enabled = getattr(config, "cache_enabled", True)
         self._cache_ttl = getattr(config, "cache_ttl", 3600.0)
 
     name = "llm"
-
-    def _get_client(self):
-        """Get or create LLM client."""
-        if self._client:
-            return self._client
-
-        if not self.llm_config:
-            raise ValueError("LLM configuration not provided")
-
-        provider = self.llm_config.provider.lower()
-
-        if provider in ("openai", "deepseek"):
-            try:
-                from openai import OpenAI
-                self._client = OpenAI(
-                    api_key=self.llm_config.get_api_key(),
-                    base_url=self.llm_config.base_url,
-                )
-            except ImportError:
-                raise ImportError("openai package not installed. Run: pip install selfheal[llm]")
-        elif provider == "anthropic":
-            try:
-                from anthropic import Anthropic
-                self._client = Anthropic(api_key=self.llm_config.get_api_key())
-            except ImportError:
-                raise ImportError("anthropic package not installed. Run: pip install selfheal[llm]")
-        else:
-            raise ValueError(f"Unknown LLM provider: {provider}")
-
-        return self._client
 
     def classify(self, event: TestFailureEvent) -> ClassificationEvent:
         """Classify a test failure using LLM, with optional cache."""
@@ -82,10 +57,8 @@ class LLMClassifier(ClassifierInterface):
                 )
 
         # --- actual LLM call ---
-        prompt = self._build_prompt(event)
-
         try:
-            response = self._call_llm(prompt)
+            response = self._call_llm(event)
             result = self._parse_response(event, response)
 
             # --- cache write ---
@@ -102,7 +75,7 @@ class LLMClassifier(ClassifierInterface):
                 logger.debug("LLM cache stored for %s", cache_key)
 
             return result
-        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as e:
+        except LLMError as e:
             logger.error(f"LLM classification failed: {e}")
             return ClassificationEvent(
                 original_event=event,
@@ -112,8 +85,8 @@ class LLMClassifier(ClassifierInterface):
                 reasoning=f"LLM error: {str(e)}",
             )
 
-    def _build_prompt(self, event: TestFailureEvent) -> str:
-        """Build classification prompt."""
+    def _build_system(self) -> list[dict]:
+        """Build system prompt with classification instructions and cache control."""
         categories = ", ".join([
             "assertion", "import", "timeout", "network", "syntax",
             "runtime", "config", "dependency", "resource", "permission",
@@ -121,60 +94,50 @@ class LLMClassifier(ClassifierInterface):
         ])
         severities = ", ".join([s.value for s in ErrorSeverity])
 
-        return f"""Classify the following test failure.
+        system_text = (
+            "You are a test failure classifier. "
+            "Analyze the error and classify it into the most appropriate category.\n\n"
+            f"Categories: {categories}\n"
+            f"Severities: {severities}"
+        )
 
-Error Type: {event.error_type}
-Error Message: {event.error_message}
+        blocks: list[dict] = [{"type": "text", "text": system_text}]
+        if getattr(self.llm_config, "enable_prompt_caching", False):
+            blocks[0]["cache_control"] = {"type": "ephemeral"}
+        return blocks
 
-Traceback:
-{event.traceback[:500]}
+    def _build_messages(self, event: TestFailureEvent) -> list[dict]:
+        """Build user messages containing only the event information."""
+        user_text = (
+            f"Error Type: {event.error_type}\n"
+            f"Error Message: {event.error_message}\n\n"
+            f"Traceback:\n{event.traceback[:500]}"
+        )
+        return [{"role": "user", "content": user_text}]
 
-Categories: {categories}
-Severities: {severities}
-
-Respond with JSON:
-{{
-    "category": "<most likely category>",
-    "severity": "<severity level>",
-    "confidence": <0.0-1.0>,
-    "reasoning": "<brief explanation>"
-}}"""
-
-    def _call_llm(self, prompt: str) -> str:
-        """Call LLM API."""
+    def _call_llm(self, event: TestFailureEvent) -> LLMResponse:
+        """Call LLM with structured tool use and automatic retry."""
         assert self.llm_config is not None
-        client = self._get_client()
-        provider = self.llm_config.provider.lower()
 
-        if provider in ("openai", "deepseek"):
-            response = client.chat.completions.create(
-                model=self.llm_config.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-            )
-            return response.choices[0].message.content
-        elif provider == "anthropic":
-            response = client.messages.create(
-                model=self.llm_config.model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return response.content[0].text
-        else:
-            raise ValueError(f"Unknown LLM provider: {provider}")
+        return call_structured(
+            self.llm_config,
+            system=self._build_system(),
+            messages=self._build_messages(event),
+            tool=CLASSIFY_TOOL,
+            temperature=self.llm_config.temperature,
+            max_tokens=1024,
+            max_retries=self.llm_config.max_retries,
+            enable_tool_use=self.llm_config.enable_tool_use,
+        )
 
     def _parse_response(
         self,
         event: TestFailureEvent,
-        response: str
+        response: LLMResponse,
     ) -> ClassificationEvent:
-        """Parse LLM response."""
-        import json
-        import re
-
-        # Extract JSON from response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
+        """Parse structured LLM response into a ClassificationEvent."""
+        data = response.tool_result
+        if not data:
             return ClassificationEvent(
                 original_event=event,
                 category="unknown",
@@ -183,21 +146,10 @@ Respond with JSON:
                 reasoning="Failed to parse LLM response",
             )
 
-        try:
-            data = json.loads(json_match.group())
-            return ClassificationEvent(
-                original_event=event,
-                category=data.get("category", "unknown"),
-                severity=ErrorSeverity(data.get("severity", "medium")),
-                confidence=float(data.get("confidence", 0.5)),
-                reasoning=data.get("reasoning", ""),
-            )
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Failed to parse LLM JSON: {e}")
-            return ClassificationEvent(
-                original_event=event,
-                category="unknown",
-                severity=ErrorSeverity.MEDIUM,
-                confidence=0.0,
-                reasoning=f"Parse error: {str(e)}",
-            )
+        return ClassificationEvent(
+            original_event=event,
+            category=data.get("category", "unknown"),
+            severity=ErrorSeverity(data.get("severity", "medium")),
+            confidence=float(data.get("confidence", 0.5)),
+            reasoning=data.get("reasoning", ""),
+        )

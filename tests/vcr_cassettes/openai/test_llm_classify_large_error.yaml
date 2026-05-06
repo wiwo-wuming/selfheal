@@ -1,18 +1,19 @@
 interactions:
 - request:
-    body: '{"messages":[{"role":"user","content":"Classify the following test failure.\n\nError
-      Type: AssertionError\nError Message: Expected value X but got Y after processing
-      pipeline.\n\nTraceback:\n  File \"module_0.py\", line 0, in func_0\n  File \"module_1.py\",
-      line 1, in func_1\n  File \"module_2.py\", line 2, in func_2\n  File \"module_3.py\",
-      line 3, in func_3\n  File \"module_4.py\", line 4, in func_4\n  File \"module_5.py\",
-      line 5, in func_5\n  File \"module_6.py\", line 6, in func_6\n  File \"module_7.py\",
-      line 7, in func_7\n  File \"module_8.py\", line 8, in func_8\n  File \"module_9.py\",
-      line 9, in func_9\n  File \"module_10.py\", line 10, in func_10\n  File \"module_11.py\",
-      line 11, in func_11\n  File \"module\n\nCategories: assertion, import, timeout,
-      network, syntax, runtime, unknown\nSeverities: critical, high, medium, low\n\nRespond
-      with JSON:\n{\n    \"category\": \"<most likely category>\",\n    \"severity\":
-      \"<severity level>\",\n    \"confidence\": <0.0-1.0>,\n    \"reasoning\": \"<brief
-      explanation>\"\n}"}],"model":"deepseek-chat","temperature":0.1}'
+    body: '{"messages":[{"role":"system","content":"You are a test failure classifier.
+      Analyze the error and classify it into the most appropriate category.\n\nCategories:
+      assertion, import, timeout, network, syntax, runtime, config, dependency, resource,
+      permission, flaky, value, type, memory, unknown\nSeverities: critical, high,
+      medium, low"},{"role":"user","content":"Error Type: AssertionError\nError Message:
+      Expected value X but got Y after processing pipeline.\n\nTraceback:\n  File
+      \"module_0.py\", line 0, in func_0\n  File \"module_1.py\", line 1, in func_1\n  File
+      \"module_2.py\", line 2, in func_2\n  File \"module_3.py\", line 3, in func_3\n  File
+      \"module_4.py\", line 4, in func_4\n  File \"module_5.py\", line 5, in func_5\n  File
+      \"module_6.py\", line 6, in func_6\n  File \"module_7.py\", line 7, in func_7\n  File
+      \"module_8.py\", line 8, in func_8\n  File \"module_9.py\", line 9, in func_9\n  File
+      \"module_10.py\", line 10, in func_10\n  File \"module_11.py\", line 11, in
+      func_11\n  File \"module"}],"model":"deepseek-chat","max_tokens":1024,"temperature":0.0,"tool_choice":{"type":"function","function":{"name":"classify_test_failure"}},"tools":[{"type":"function","function":{"name":"classify_test_failure","description":"Classify
+      a test failure into a category with severity and confidence.","input_schema":{"type":"object","properties":{"category":{"type":"string","enum":["assertion","import","timeout","network","syntax","runtime","config","dependency","resource","permission","flaky","value","type","memory","unknown"]},"severity":{"type":"string","enum":["critical","high","medium","low"]},"confidence":{"type":"number","minimum":0.0,"maximum":1.0},"reasoning":{"type":"string"}},"required":["category","severity","confidence","reasoning"]}}}]}'
     headers:
       Accept:
       - application/json
@@ -21,7 +22,7 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '1084'
+      - '1767'
       Content-Type:
       - application/json
       Host:
@@ -50,14 +51,7 @@ interactions:
     uri: https://api.deepseek.com/v1/chat/completions
   response:
     body:
-      string: '{"id":"6d3fae0b-9188-4e54-ac9d-744ddfcb913a","object":"chat.completion","created":1777641126,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"{\n    \"category\":
-        \"assertion\",\n    \"severity\": \"medium\",\n    \"confidence\": 0.95,\n    \"reasoning\":
-        \"The error type is AssertionError with a message indicating an expected vs
-        actual value mismatch after processing a pipeline. The traceback shows a deep
-        call stack through multiple modules, but the root cause is clearly an assertion
-        failure, not an import, timeout, network, syntax, or runtime error. Severity
-        is medium because it indicates a logic or data processing issue, not a crash
-        or security problem.\"\n}"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":320,"completion_tokens":112,"total_tokens":432,"prompt_tokens_details":{"cached_tokens":0},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":320},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+      string: '{"id":"9767ff36-7239-4858-bd7c-af751c49016c","object":"chat.completion","created":1778057215,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[{"index":0,"id":"call_00_5owT0VLMTDR0egKVG1UG6425","type":"function","function":{"name":"classify_test_failure","arguments":"{}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":558,"completion_tokens":23,"total_tokens":581,"prompt_tokens_details":{"cached_tokens":512},"prompt_cache_hit_tokens":512,"prompt_cache_miss_tokens":46},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
     headers:
       Age:
       - '0'
@@ -66,11 +60,11 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Fri, 01 May 2026 13:12:06 GMT
+      - Wed, 06 May 2026 08:46:55 GMT
       EO-Cache-Status:
       - MISS
       EO-LOG-UUID:
-      - '4255610638613494940'
+      - '8185487752724325478'
       Server:
       - openresty
       Strict-Transport-Security:
@@ -84,7 +78,7 @@ interactions:
       vary:
       - origin, access-control-request-method, access-control-request-headers
       x-ds-trace-id:
-      - a8554b8d8a665be1cfe9df46da0d96a3
+      - a6349123af34603099f8e43314d423d5
     status:
       code: 200
       message: OK

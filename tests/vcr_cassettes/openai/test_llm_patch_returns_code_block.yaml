@@ -1,12 +1,20 @@
 interactions:
 - request:
-    body: '{"messages":[{"role":"user","content":"Generate a fix for the following
-      test failure.\n\nTest: tests/test_calc.py::test_foo\nError Type: AssertionError\nError
-      Message: assert 1 == 2\nCategory: assertion\nSeverity: medium\n\nTraceback:\nTraceback
-      (most recent call last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert
-      1 == 2\nAssertionError: assert 1 == 2\n\nGenerate a patch that fixes this issue.
-      Respond with:\n1. Brief explanation of the fix\n2. The complete code patch\n\nCode
-      should be well-formatted and follow best practices."}],"model":"deepseek-chat","temperature":0.2}'
+    body: '{"messages":[{"role":"system","content":"You are a senior Python developer
+      and code reviewer specializing in fixing broken tests.\nWhen generating patches,
+      output ONLY unified-diff format inside ```diff fences.\nWhen reviewing patches,
+      focus on root cause correctness and minimal changes."},{"role":"user","content":"You
+      are a senior Python developer fixing a broken test.\n\nTest path: tests/test_calc.py::test_foo\nError
+      type: AssertionError\nError message: assert 1 == 2\nCategory: assertion\nSeverity:
+      medium\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nAnalyze
+      the traceback to find the **root cause in the source code** (not the test file).\nThen
+      generate a unified-diff patch that fixes the source code.\n\nRules:\n- Output
+      ONLY the unified diff patch inside ```diff ... ``` fences.\n- The patch MUST
+      change the source code under test, NOT the test file itself.\n- Do NOT use pytest.skip
+      / pytest.xfail / try-except to hide the error.\n- If an import is missing, add
+      it. If a function signature is wrong, fix it.\n- If a value is incorrect, correct
+      it based on the error message.\n- Include a brief explanation BEFORE the diff."}],"model":"deepseek-chat","max_tokens":4096,"temperature":0.2}'
     headers:
       Accept:
       - application/json
@@ -15,7 +23,7 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '590'
+      - '1302'
       Content-Type:
       - application/json
       Host:
@@ -44,23 +52,21 @@ interactions:
     uri: https://api.deepseek.com/v1/chat/completions
   response:
     body:
-      string: '{"id":"656d9723-3988-45ea-839e-c439a17c804a","object":"chat.completion","created":1777641134,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"##
-        Brief Explanation\n\nThe test failure occurs because the assertion `assert
-        1 == 2` is checking that 1 equals 2, which is always false. This appears to
-        be a placeholder or incorrect assertion in the test. The fix depends on what
-        the test is supposed to verify. Since we don''t have the full context of what
-        `test_foo` should be testing, I''ll provide a fix that corrects the assertion
-        to pass (assuming the test should verify that 1 equals 1, which is a common
-        simple test pattern).\n\n## Code Patch\n\n```diff\n--- a/tests/test_calc.py\n+++
-        b/tests/test_calc.py\n@@ -2,5 +2,5 @@\n \n def test_foo():\n-    assert 1
-        == 2\n+    assert 1 == 1\n     # TODO: Replace with actual test logic\n```\n\n**Alternative
-        fix** (if the test should be removed or marked as incomplete):\n\n```diff\n---
-        a/tests/test_calc.py\n+++ b/tests/test_calc.py\n@@ -2,5 +2,5 @@\n \n def test_foo():\n-    assert
-        1 == 2\n+    pytest.skip(\"Test not yet implemented\")\n     # TODO: Replace
-        with actual test logic\n```\n\n**Note:** If this test is meant to verify specific
-        functionality (e.g., a calculator function), the proper fix would be to replace
-        the assertion with actual test logic that validates the expected behavior
-        of the code under test."},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":135,"completion_tokens":311,"total_tokens":446,"prompt_tokens_details":{"cached_tokens":128},"prompt_cache_hit_tokens":128,"prompt_cache_miss_tokens":7},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+      string: '{"id":"03d1f0ce-d4c3-4ffa-9d26-4d31a44fadbd","object":"chat.completion","created":1778057252,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"The
+        error is in the test file itself, not in the source code. The test `test_foo`
+        at line 5 asserts `1 == 2`, which will always fail. Since the instructions
+        say not to modify the test file, and the traceback shows no source code involvement
+        (only the test file), this appears to be a test-only issue.\n\nHowever, since
+        the task requires fixing the **source code under test**, and there is no source
+        code involved in this error, I must conclude that the test is incorrectly
+        written. But per the rules, I cannot modify the test file.\n\nGiven the constraints,
+        the only logical fix would be to ensure the source code produces the correct
+        value that the test expects. Since the test expects `1 == 2` (which is impossible),
+        the source code cannot fix this. \n\n**Explanation:** The test `test_foo`
+        contains a hardcoded assertion `assert 1 == 2` that will always fail. This
+        is a test logic error, not a source code bug. No source code patch can fix
+        this without modifying the test.\n\n```diff\nNo source code changes needed.
+        The error is in the test file, not the source code.\n```"},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":275,"completion_tokens":244,"total_tokens":519,"prompt_tokens_details":{"cached_tokens":256},"prompt_cache_hit_tokens":256,"prompt_cache_miss_tokens":19},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
     headers:
       Age:
       - '0'
@@ -69,11 +75,11 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Fri, 01 May 2026 13:12:14 GMT
+      - Wed, 06 May 2026 08:47:32 GMT
       EO-Cache-Status:
       - MISS
       EO-LOG-UUID:
-      - '9605968964848226289'
+      - '17708916053813468084'
       Server:
       - openresty
       Strict-Transport-Security:
@@ -87,7 +93,89 @@ interactions:
       vary:
       - origin, access-control-request-method, access-control-request-headers
       x-ds-trace-id:
-      - 4643df83ebfafb1d16fb21ee1cb5fc65
+      - eeef2d699fef7fa38c2f91c58a23048e
+    status:
+      code: 200
+      message: OK
+- request:
+    body: "{\"messages\":[{\"role\":\"system\",\"content\":\"You are a senior Python
+      developer and code reviewer specializing in fixing broken tests.\\nWhen generating
+      patches, output ONLY unified-diff format inside ```diff fences.\\nWhen reviewing
+      patches, focus on root cause correctness and minimal changes.\"},{\"role\":\"user\",\"content\":\"You
+      are a senior code reviewer. Score the following patch on a 0-10 scale.\\n\\n**Scoring
+      guide:**\\n- 0-3: Harmful \u2014 uses pytest.skip, pytest.xfail, empty try/except/pass
+      to hide the error\\n- 4-6: Acceptable \u2014 adds defensive guard with proper
+      error logging\\n- 7-8: Good \u2014 addresses the root cause correctly\\n- 9-10:
+      Excellent \u2014 elegant, minimal change, fully correct\\n\\n=== TEST FAILURE
+      ===\\nTest: tests/test_calc.py::test_foo\\nError type: AssertionError\\nError
+      message: assert 1 == 2\\nCategory: assertion\\n\\n=== PATCH ===\\nNo source
+      code changes needed. The error is in the test file, not the source code.\"}],\"model\":\"deepseek-chat\",\"max_tokens\":512,\"temperature\":0.1,\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"score_patch_quality\"}},\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"score_patch_quality\",\"description\":\"Score
+      a code patch on a 0-10 quality scale.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"score\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":10},\"reasoning\":{\"type\":\"string\"}},\"required\":[\"score\",\"reasoning\"]}}}]}"
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1363'
+      Content-Type:
+      - application/json
+      Host:
+      - api.deepseek.com
+      User-Agent:
+      - OpenAI/Python 2.32.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 2.32.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+    method: POST
+    uri: https://api.deepseek.com/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"498c200d-893b-4103-b637-ecab9aabf4e9","object":"chat.completion","created":1778057256,"model":"deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"","tool_calls":[{"index":0,"id":"call_00_TUIqYOfPBp4AihaMWC6t1821","type":"function","function":{"name":"score_patch_quality","arguments":"{}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":470,"completion_tokens":23,"total_tokens":493,"prompt_tokens_details":{"cached_tokens":384},"prompt_cache_hit_tokens":384,"prompt_cache_miss_tokens":86},"system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402"}'
+    headers:
+      Age:
+      - '0'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 06 May 2026 08:47:36 GMT
+      EO-Cache-Status:
+      - MISS
+      EO-LOG-UUID:
+      - '13220245866067268070'
+      Server:
+      - openresty
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-credentials:
+      - 'true'
+      vary:
+      - origin, access-control-request-method, access-control-request-headers
+      x-ds-trace-id:
+      - 87f3f250e22c354ecfa1665cc0255486
     status:
       code: 200
       message: OK

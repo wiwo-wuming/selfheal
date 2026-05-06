@@ -7,6 +7,7 @@ import pytest
 
 from selfheal.config import ClassifierConfig, LLMConfig, PatcherConfig
 from selfheal.core.classifiers.llm_classifier import LLMClassifier
+from selfheal.core.llm_client import LLMClientFactory, LLMResponse
 from selfheal.core.patchers.llm_patcher import LLMPatcher
 from selfheal.events import ClassificationEvent, ErrorSeverity, TestFailureEvent
 
@@ -20,8 +21,10 @@ def _reset_cache():
     """Reset the global LLM response cache before each test."""
     from selfheal.core.cache import reset_cache
     reset_cache()
+    LLMClientFactory.reset()
     yield
     reset_cache()
+    LLMClientFactory.reset()
 
 
 # ---------------------------------------------------------------------------
@@ -69,94 +72,95 @@ class TestLLMClassifier:
             classifier.classify(sample_failure)
 
     def test_unknown_provider_raises(self, sample_failure):
-        """_get_client raises for unknown providers."""
+        """LLMClientFactory raises for unknown providers."""
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="cohere", model="command", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
+        LLMClientFactory.reset()
         with pytest.raises(ValueError, match="Unknown LLM provider"):
-            classifier._get_client()
+            LLMClientFactory.get_client(classifier.llm_config)
 
     def test_classify_openai_success(self, sample_failure):
         """classify() returns correct ClassificationEvent on success."""
-        mock_openai = Mock()
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content=json.dumps({
+        mock_response = LLMResponse(
+            content=json.dumps({
                 "category": "assertion",
                 "severity": "high",
                 "confidence": 0.95,
                 "reasoning": "The error is an assertion failure on HTTP status",
-            })))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+            }),
+            tool_result={
+                "category": "assertion",
+                "severity": "high",
+                "confidence": 0.95,
+                "reasoning": "The error is an assertion failure on HTTP status",
+            },
+        )
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
-        result = classifier.classify(sample_failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=mock_response) as mock_call:
+            result = classifier.classify(sample_failure)
 
-        assert result.category == "assertion"
-        assert result.severity == ErrorSeverity.HIGH
-        assert result.confidence == 0.95
-        assert "assertion failure" in result.reasoning
+            assert result.category == "assertion"
+            assert result.severity == ErrorSeverity.HIGH
+            assert result.confidence == 0.95
+            assert "assertion failure" in result.reasoning
 
-        # Verify the prompt was sent
-        call_args = mock_openai.chat.completions.create.call_args
-        assert call_args[1]["model"] == "gpt-4"
-        assert len(call_args[1]["messages"]) == 1
-        assert "Expected 200, got 401" in call_args[1]["messages"][0]["content"]
+            # Verify the prompt was sent
+            call_args = mock_call.call_args
+            assert call_args[1]["tool"]["name"] == "classify_test_failure"
+            messages = call_args[1]["messages"]
+            assert "Expected 200, got 401" in messages[0]["content"]
 
     def test_classify_anthropic_success(self, sample_failure):
         """classify() works with Anthropic provider."""
-        mock_anthropic = Mock()
-        mock_response = Mock()
-        mock_response.content = [
-            Mock(text=json.dumps({
+        mock_response = LLMResponse(
+            content="",
+            tool_result={
                 "category": "network",
                 "severity": "medium",
                 "confidence": 0.8,
                 "reasoning": "HTTP 401 suggests auth issue",
-            }))
-        ]
-        mock_anthropic.messages.create.return_value = mock_response
+            },
+        )
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="anthropic", model="claude-3", api_key="sk-ant-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_anthropic
 
-        result = classifier.classify(sample_failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=mock_response):
+            result = classifier.classify(sample_failure)
 
-        assert result.category == "network"
-        assert result.severity == ErrorSeverity.MEDIUM
-        assert result.confidence == 0.8
+            assert result.category == "network"
+            assert result.severity == ErrorSeverity.MEDIUM
+            assert result.confidence == 0.8
 
     def test_classify_fallback_on_api_error(self, sample_failure):
         """classify() falls back to 'unknown' on API error."""
-        mock_openai = Mock()
-        mock_openai.chat.completions.create.side_effect = RuntimeError("API down")
+        from selfheal.core.llm_client import LLMError
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
-        result = classifier.classify(sample_failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", side_effect=LLMError("API down")):
+            result = classifier.classify(sample_failure)
 
-        assert result.category == "unknown"
-        assert result.severity == ErrorSeverity.MEDIUM
-        assert result.confidence == 0.0
-        assert "LLM error" in result.reasoning
+            assert result.category == "unknown"
+            assert result.severity == ErrorSeverity.MEDIUM
+            assert result.confidence == 0.0
+            assert "LLM error" in result.reasoning
 
     def test_parse_response_invalid_json(self, sample_failure):
         """_parse_response handles non-JSON responses gracefully."""
@@ -166,7 +170,8 @@ class TestLLMClassifier:
         )
         classifier = LLMClassifier(config)
 
-        result = classifier._parse_response(sample_failure, "No JSON here, just plain text")
+        response = LLMResponse(content="No JSON here, just plain text", tool_result=None)
+        result = classifier._parse_response(sample_failure, response)
 
         assert result.category == "unknown"
         assert result.confidence == 0.0
@@ -180,10 +185,11 @@ class TestLLMClassifier:
         )
         classifier = LLMClassifier(config)
 
-        result = classifier._parse_response(
-            sample_failure,
-            json.dumps({"category": "syntax"}),  # missing severity, confidence, reasoning
+        response = LLMResponse(
+            content=json.dumps({"category": "syntax"}),
+            tool_result={"category": "syntax"},  # missing severity, confidence, reasoning
         )
+        result = classifier._parse_response(sample_failure, response)
 
         assert result.category == "syntax"
         assert result.severity == ErrorSeverity.MEDIUM  # default
@@ -198,11 +204,13 @@ class TestLLMClassifier:
         )
         classifier = LLMClassifier(config)
 
-        response = (
-            "Here is my analysis:\n\n"
-            '{"category": "runtime", "severity": "critical", "confidence": 0.99, "reasoning": "DB error"}'
-            "\n\nLet me know if you need more detail."
-        )
+        tool_data = {
+            "category": "runtime",
+            "severity": "critical",
+            "confidence": 0.99,
+            "reasoning": "DB error",
+        }
+        response = LLMResponse(content=json.dumps(tool_data), tool_result=tool_data)
         result = classifier._parse_response(sample_failure, response)
 
         assert result.category == "runtime"
@@ -232,50 +240,45 @@ class TestLLMPatcher:
 
     def test_generate_openai_success(self, sample_classification):
         """generate() returns a PatchEvent with LLM-generated content."""
-        mock_openai = Mock()
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content=(
-                "The issue is a missing table. Here's the fix:\n\n"
-                "```python\n"
-                "def setup_db():\n"
-                "    conn.execute('CREATE TABLE IF NOT EXISTS users (...)')\n"
-                "```"
-            )))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+        patch_content = (
+            "The issue is a missing table. Here's the fix:\n\n"
+            "```python\n"
+            "def setup_db():\n"
+            "    conn.execute('CREATE TABLE IF NOT EXISTS users (...)')\n"
+            "```"
+        )
+        mock_response = LLMResponse(content=patch_content, tool_result={"score": 8, "reasoning": "Good fix"})
 
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
-        result = patcher.generate(sample_classification)
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", return_value=mock_response):
+            result = patcher.generate(sample_classification)
 
-        assert result.generator.startswith("llm")
-        assert "CREATE TABLE" in result.patch_content
-        assert result.classification_event == sample_classification
-        assert len(result.patch_id) > 0
+            assert result.generator.startswith("llm")
+            assert "CREATE TABLE" in result.patch_content
+            assert result.classification_event == sample_classification
+            assert len(result.patch_id) > 0
 
     def test_generate_fallback_on_api_error(self, sample_classification):
         """generate() returns a PatchEvent with error message on API failure."""
-        mock_openai = Mock()
-        mock_openai.chat.completions.create.side_effect = RuntimeError("API timeout")
+        from selfheal.core.llm_client import LLMError
 
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
-        result = patcher.generate(sample_classification)
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", side_effect=LLMError("API timeout")):
+            result = patcher.generate(sample_classification)
 
-        assert result.generator.startswith("llm")
-        assert "LLM generation failed" in result.patch_content
-        assert result.classification_event == sample_classification
+            assert result.generator.startswith("llm")
+            assert "LLM generation failed" in result.patch_content
+            assert result.classification_event == sample_classification
 
     def test_extract_code_from_blocks(self, sample_classification):
         """_extract_code extracts the largest code block from response."""

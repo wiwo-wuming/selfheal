@@ -76,6 +76,22 @@ class LLMResponseCache:
             self._store.clear()
 
     @property
+    def prompt_caching_hint(self) -> dict[str, Any]:
+        """Return stats that help decide whether to use Anthropic prompt caching.
+
+        When the local cache hit rate is high, the prompt is mostly stable —
+        this is exactly the scenario where Anthropic's server-side prompt
+        caching (``cache_control``) provides the most benefit.
+        """
+        total = self._hits + self._misses
+        hit_rate = (self._hits / total * 100) if total > 0 else 0.0
+        return {
+            "local_hit_rate": hit_rate,
+            "recommend_prompt_caching": hit_rate > 50.0,
+            "savings_potential": "high" if hit_rate > 80 else "medium" if hit_rate > 50 else "low",
+        }
+
+    @property
     def stats(self) -> dict[str, Any]:
         """Return cache hit/miss statistics."""
         total = self._hits + self._misses

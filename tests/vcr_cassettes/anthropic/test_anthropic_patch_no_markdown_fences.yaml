@@ -1,12 +1,21 @@
 interactions:
 - request:
-    body: '{"max_tokens":2048,"messages":[{"role":"user","content":"Generate a fix
-      for the following test failure.\n\nTest: tests/test_calc.py::test_foo\nError
-      Type: AssertionError\nError Message: assert add(1, 2) == 4\nCategory: assertion\nSeverity:
+    body: '{"max_tokens":4096,"messages":[{"role":"user","content":"You are a senior
+      Python developer fixing a broken test.\n\nTest path: tests/test_calc.py::test_foo\nError
+      type: AssertionError\nError message: assert add(1, 2) == 4\nCategory: assertion\nSeverity:
       medium\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
-      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nGenerate
-      a patch that fixes this issue. Respond with:\n1. Brief explanation of the fix\n2.
-      The complete code patch\n\nCode should be well-formatted and follow best practices."}],"model":"claude-3-haiku-20240307"}'
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nAnalyze
+      the traceback to find the **root cause in the source code** (not the test file).\nThen
+      generate a unified-diff patch that fixes the source code.\n\nRules:\n- Output
+      ONLY the unified diff patch inside ```diff ... ``` fences.\n- The patch MUST
+      change the source code under test, NOT the test file itself.\n- Do NOT use pytest.skip
+      / pytest.xfail / try-except to hide the error.\n- If an import is missing, add
+      it. If a function signature is wrong, fix it.\n- If a value is incorrect, correct
+      it based on the error message.\n- Include a brief explanation BEFORE the diff."}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a senior Python developer and code reviewer specializing in fixing broken
+      tests.\nWhen generating patches, output ONLY unified-diff format inside ```diff
+      fences.\nWhen reviewing patches, focus on root cause correctness and minimal
+      changes.","cache_control":{"type":"ephemeral"}}],"temperature":0.2}'
     headers:
       Accept:
       - application/json
@@ -15,11 +24,11 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '608'
+      - '1353'
       Content-Type:
       - application/json
       Host:
-      - api.deepseek.com
+      - token-plan-cn.xiaomimimo.com
       User-Agent:
       - Anthropic/Python 0.97.0
       X-Stainless-Arch:
@@ -43,51 +52,206 @@ interactions:
       x-stainless-timeout:
       - '600'
     method: POST
-    uri: https://api.deepseek.com/anthropic/v1/messages
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
   response:
     body:
-      string: '{"id":"1d26eed0-4996-49a0-a512-a628fa61a79d","type":"message","role":"assistant","model":"deepseek-v4-flash","content":[{"type":"text","text":"##
-        Explanation\n\nThe test `test_foo` is failing because it''s asserting that
-        `add(1, 2)` equals `4`, but the actual result is `3`. The second error in
-        the traceback (`assert 1 == 2`) suggests the original test was checking something
-        else, but the main failure is the assertion error about `add(1, 2)`.\n\nThe
-        fix depends on whether the issue is in the test (wrong expected value) or
-        the `add` function (bug in calculation). Based on typical test scenarios,
-        this appears to be a test with an incorrect expected value - `add(1, 2)` should
-        correctly return `3`, not `4`.\n\n## Patch\n\n```diff\n--- a/test_calc.py\n+++
-        b/test_calc.py\n@@ -2,5 +2,5 @@\n from calc import add\n \n def test_foo():\n-    assert
-        add(1, 2) == 4\n+    assert add(1, 2) == 3  # 1 + 2 = 3\n```\n\n**Alternative
-        fix** (if the `add` function is actually broken):\n\n```diff\n--- a/calc.py\n+++
-        b/calc.py\n@@ -1,2 +1,2 @@\n def add(a, b):\n-    return a + b + 1  # Example
-        bug: off-by-one error\n+    return a + b  # Correct implementation\n```"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":140,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":302,"service_tier":"standard"}}'
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
     headers:
-      Age:
-      - '0'
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
       Connection:
       - keep-alive
+      Content-Length:
+      - '139'
       Content-Type:
       - application/json
       Date:
-      - Sun, 03 May 2026 03:05:07 GMT
-      EO-Cache-Status:
-      - MISS
-      EO-LOG-UUID:
-      - '3144381873147262416'
+      - Wed, 06 May 2026 08:47:23 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
       Server:
-      - openresty
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-allow-credentials:
-      - 'true'
-      vary:
-      - origin, access-control-request-method, access-control-request-headers
-      x-ds-trace-id:
-      - aaf9fe7a52e45b5d8059b24ff2c161d2
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
     status:
-      code: 200
-      message: OK
+      code: 400
+      message: Bad Request
+- request:
+    body: '{"max_tokens":4096,"messages":[{"role":"user","content":"You are a senior
+      Python developer fixing a broken test.\n\nTest path: tests/test_calc.py::test_foo\nError
+      type: AssertionError\nError message: assert add(1, 2) == 4\nCategory: assertion\nSeverity:
+      medium\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nAnalyze
+      the traceback to find the **root cause in the source code** (not the test file).\nThen
+      generate a unified-diff patch that fixes the source code.\n\nRules:\n- Output
+      ONLY the unified diff patch inside ```diff ... ``` fences.\n- The patch MUST
+      change the source code under test, NOT the test file itself.\n- Do NOT use pytest.skip
+      / pytest.xfail / try-except to hide the error.\n- If an import is missing, add
+      it. If a function signature is wrong, fix it.\n- If a value is incorrect, correct
+      it based on the error message.\n- Include a brief explanation BEFORE the diff."}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a senior Python developer and code reviewer specializing in fixing broken
+      tests.\nWhen generating patches, output ONLY unified-diff format inside ```diff
+      fences.\nWhen reviewing patches, focus on root cause correctness and minimal
+      changes.","cache_control":{"type":"ephemeral"}}],"temperature":0.2}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1353'
+      Content-Type:
+      - application/json
+      Host:
+      - token-plan-cn.xiaomimimo.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
+  response:
+    body:
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
+    headers:
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '139'
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 06 May 2026 08:47:24 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Server:
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
+    status:
+      code: 400
+      message: Bad Request
+- request:
+    body: '{"max_tokens":4096,"messages":[{"role":"user","content":"You are a senior
+      Python developer fixing a broken test.\n\nTest path: tests/test_calc.py::test_foo\nError
+      type: AssertionError\nError message: assert add(1, 2) == 4\nCategory: assertion\nSeverity:
+      medium\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
+      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nAnalyze
+      the traceback to find the **root cause in the source code** (not the test file).\nThen
+      generate a unified-diff patch that fixes the source code.\n\nRules:\n- Output
+      ONLY the unified diff patch inside ```diff ... ``` fences.\n- The patch MUST
+      change the source code under test, NOT the test file itself.\n- Do NOT use pytest.skip
+      / pytest.xfail / try-except to hide the error.\n- If an import is missing, add
+      it. If a function signature is wrong, fix it.\n- If a value is incorrect, correct
+      it based on the error message.\n- Include a brief explanation BEFORE the diff."}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a senior Python developer and code reviewer specializing in fixing broken
+      tests.\nWhen generating patches, output ONLY unified-diff format inside ```diff
+      fences.\nWhen reviewing patches, focus on root cause correctness and minimal
+      changes.","cache_control":{"type":"ephemeral"}}],"temperature":0.2}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1353'
+      Content-Type:
+      - application/json
+      Host:
+      - token-plan-cn.xiaomimimo.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
+  response:
+    body:
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
+    headers:
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '139'
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 06 May 2026 08:47:26 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Server:
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
+    status:
+      code: 400
+      message: Bad Request
 version: 1

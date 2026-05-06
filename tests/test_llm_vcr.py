@@ -38,9 +38,13 @@ from selfheal.core.classifiers.llm_classifier import LLMClassifier
 def _has_api_key(provider="openai"):
     """Check if the required API key is available."""
     if provider == "openai":
-        return bool(os.environ.get("OPENAI_API_KEY"))
+        return bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"))
     elif provider == "anthropic":
-        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+        return bool(
+            os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        )
     return False
 
 
@@ -143,21 +147,23 @@ except ImportError:
 
 @pytest.mark.vcr
 @pytest.mark.skipif(
-    not (_has_api_key("anthropic") or (_has_anthropic and os.environ.get("CI") == "1")),
-    reason="ANTHROPIC_API_KEY not set and no cassette available for replay",
+    not _has_api_key("anthropic"),
+    reason="No API key available for Anthropic-compatible endpoint",
 )
 class TestAnthropicClassifierVCR:
     """VCR-based tests for Anthropic LLM classifier — validates multi-provider consistency."""
 
     @pytest.fixture
     def anthropic_classifier(self):
-        """Create an LLMClassifier configured for Anthropic."""
+        """Create an LLMClassifier configured for Anthropic via DeepSeek compatible endpoint."""
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
         cfg = ClassifierConfig(
             type="llm",
             llm=LLMConfig(
                 provider="anthropic",
-                model="claude-3-haiku-20240307",
-                api_key="${ANTHROPIC_API_KEY}",
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com/anthropic",
                 temperature=0,
             ),
         )
@@ -229,24 +235,26 @@ class TestAnthropicClassifierVCR:
 
 @pytest.mark.vcr
 @pytest.mark.skipif(
-    not (_has_api_key("anthropic") or (_has_anthropic and os.environ.get("CI") == "1")),
-    reason="ANTHROPIC_API_KEY not set and no cassette available for replay",
+    not _has_api_key("anthropic"),
+    reason="No API key available for Anthropic-compatible endpoint",
 )
 class TestAnthropicPatcherVCR:
     """VCR-based tests for Anthropic LLM patcher — validates multi-provider patch generation."""
 
     @pytest.fixture
     def anthropic_patcher(self):
-        """Create an LLMPatcher configured for Anthropic."""
+        """Create an LLMPatcher configured for Anthropic via DeepSeek compatible endpoint."""
         from selfheal.events import ClassificationEvent, ErrorSeverity
         from selfheal.core.patchers.llm_patcher import LLMPatcher
 
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
         cfg = PatcherConfig(
             type="llm",
             llm=LLMConfig(
                 provider="anthropic",
-                model="claude-3-haiku-20240307",
-                api_key="${ANTHROPIC_API_KEY}",
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com/anthropic",
                 temperature=0.2,
             ),
             refine_rounds=1,  # VCR cassette only has single round recorded
@@ -265,7 +273,7 @@ class TestAnthropicPatcherVCR:
             result = anthropic_patcher.generate(self._cls)
         assert result.patch_content is not None
         assert len(result.patch_content) > 0
-        assert result.generator == "llm"
+        assert result.generator.startswith("llm")
 
     def test_anthropic_patch_import_error(self, vcr_anthropic, anthropic_patcher):
         """Generate a patch for an import error via Anthropic."""
@@ -331,7 +339,7 @@ class TestLLMPatcherVCR:
             result = openai_patcher.generate(self._cls)
         assert result.patch_content is not None
         assert len(result.patch_content) > 0
-        assert result.generator == "llm"
+        assert result.generator.startswith("llm")
 
     def test_llm_patch_returns_code_block(self, vcr_openai, openai_patcher):
         """Verify the LLM patcher extracts code from the response."""

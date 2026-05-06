@@ -1,3 +1,0 @@
-# VCR cassettes for LLM integration tests.
-# Recorded API responses for reproducible CI testing.
-# To re-record: set OPENAI_API_KEY env var and delete the relevant .yml files.

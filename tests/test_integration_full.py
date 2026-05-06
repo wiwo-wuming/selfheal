@@ -32,6 +32,7 @@ from selfheal.config import (
     ValidatorConfig,
 )
 from selfheal.core.classifiers.llm_classifier import LLMClassifier
+from selfheal.core.llm_client import LLMClientFactory, LLMResponse, LLMError, LLMConnectionError
 from selfheal.core.patchers.llm_patcher import LLMPatcher
 from selfheal.core.reporters.github_reporter import GitHubReporter
 from selfheal.core.reporters.webhook_reporter import WebhookReporter
@@ -80,24 +81,19 @@ class TestLLMClassifierFullIntegration:
             f"  File 'mod_{i}.py', line {i}, in func_{i}" for i in range(50)
         ) + "\nAssertionError: expected 42 got 0"
 
-        mock_openai = Mock()
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content=json.dumps({
-                "category": "assertion",
-                "severity": "high",
-                "confidence": 0.92,
-                "reasoning": "Assertion failure in deeply nested code",
-            })))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+        tool_data = {
+            "category": "assertion",
+            "severity": "high",
+            "confidence": 0.92,
+            "reasoning": "Assertion failure in deeply nested code",
+        }
+        mock_response = LLMResponse(content=json.dumps(tool_data), tool_result=tool_data)
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
         failure = TestFailureEvent(
             test_path="tests/test_deep.py::test_nested",
@@ -105,30 +101,29 @@ class TestLLMClassifierFullIntegration:
             error_message="expected 42 got 0",
             traceback=huge_traceback,
         )
-        result = classifier.classify(failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=mock_response):
+            result = classifier.classify(failure)
 
         assert result.category == "assertion"
         assert result.confidence > 0.9
 
     def test_classify_with_streaming_malformed_json(self):
         """Handles LLM response that returns concatenated incomplete JSON chunks."""
-        mock_openai = Mock()
-
-        # Simulate three chunks of response
-        mock_openai.chat.completions.create.return_value = Mock()
-        mock_openai.chat.completions.create.return_value.choices = [
-            Mock(message=Mock(content='{"category": "runtime", "severity": "medium", "co'))  # truncated
-        ]
+        # tool_result=None simulates failed JSON parsing
+        mock_response = LLMResponse(
+            content='{"category": "runtime", "severity": "medium", "co',
+            tool_result=None,
+        )
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
         failure = make_failure(test_path="tests/test_api.py::test_get")
-        result = classifier.classify(failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=mock_response):
+            result = classifier.classify(failure)
 
         # Should fallback to unknown on parse failure
         assert result.category == "unknown"
@@ -136,66 +131,44 @@ class TestLLMClassifierFullIntegration:
 
     def test_classify_connection_timeout_fallback(self):
         """Falls back gracefully on connection timeout."""
-        mock_openai = Mock()
-        mock_openai.chat.completions.create.side_effect = ConnectionError("Connection timed out")
-
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
-        result = classifier.classify(make_failure())
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", side_effect=LLMConnectionError("Connection timed out")):
+            result = classifier.classify(make_failure())
 
         assert result.category == "unknown"
         assert "LLM error" in result.reasoning
 
     def test_classify_rate_limit_with_retry_behavior(self):
-        """First call rate-limited, second succeeds (test retry mechanism mock)."""
-        mock_openai = Mock()
-
-        call_count = [0]
-
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise RuntimeError("Rate limit exceeded")
-            resp = Mock()
-            resp.choices = [Mock(message=Mock(content=json.dumps({
-                "category": "network", "severity": "medium",
-                "confidence": 0.7, "reasoning": "API rate limit caused failure",
-            })))]
-            return resp
-
-        mock_openai.chat.completions.create.side_effect = side_effect
+        """Rate limit errors are handled gracefully (retry is internal to call_with_retry)."""
+        from selfheal.core.llm_client import LLMRateLimitError
 
         config = ClassifierConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_openai
 
-        # First call fails, second succeeds
-        try:
-            result = classifier._call_llm("test prompt")
-        except Exception:
-            result = classifier._call_llm("test prompt")
+        # All retries exhausted — call_structured raises LLMRateLimitError
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", side_effect=LLMRateLimitError("Rate limit exceeded", status_code=429)):
+            result = classifier.classify(make_failure())
 
-        assert isinstance(result, str)
+        # Classifier falls back to unknown gracefully
+        assert result.category == "unknown"
+        assert result.confidence == 0.0
+        assert "LLM error" in result.reasoning
 
     def test_classify_anthropic_with_base_url_override(self):
         """Anthropic provider with custom base URL."""
-        mock_anthropic = Mock()
-        mock_response = Mock()
-        mock_response.content = [
-            Mock(text=json.dumps({
-                "category": "runtime", "severity": "high",
-                "confidence": 0.88, "reasoning": "DB connection failure",
-            }))
-        ]
-        mock_anthropic.messages.create.return_value = mock_response
+        tool_data = {
+            "category": "runtime", "severity": "high",
+            "confidence": 0.88, "reasoning": "DB connection failure",
+        }
+        mock_response = LLMResponse(content="", tool_result=tool_data)
 
         config = ClassifierConfig(
             type="llm",
@@ -205,7 +178,6 @@ class TestLLMClassifierFullIntegration:
             ),
         )
         classifier = LLMClassifier(config)
-        classifier._client = mock_anthropic
 
         failure = TestFailureEvent(
             test_path="tests/test_db.py::test_connect",
@@ -213,7 +185,8 @@ class TestLLMClassifierFullIntegration:
             error_message="could not connect to server",
             traceback="psycopg2.OperationalError: could not connect",
         )
-        result = classifier.classify(failure)
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=mock_response):
+            result = classifier.classify(failure)
         assert result.category == "runtime"
 
 
@@ -226,91 +199,77 @@ class TestLLMPatcherFullIntegration:
 
     def test_generate_patch_for_import_error(self):
         """Generates import fix patch from LLM response."""
-        mock_openai = Mock()
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content=(
-                "The test is missing an import. Here's the fix:\n\n"
-                "```python\n"
-                "import sqlite3\n\n"
-                "def get_users():\n"
-                "    conn = sqlite3.connect(':memory:')\n"
-                "    return conn.execute('SELECT * FROM users').fetchall()\n"
-                "```"
-            )))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+        patch_content = (
+            "The test is missing an import. Here's the fix:\n\n"
+            "```python\n"
+            "import sqlite3\n\n"
+            "def get_users():\n"
+            "    conn = sqlite3.connect(':memory:')\n"
+            "    return conn.execute('SELECT * FROM users').fetchall()\n"
+            "```"
+        )
+        mock_response = LLMResponse(content=patch_content, tool_result={"score": 8, "reasoning": "Good fix"})
 
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
         classification = make_classification(
             category="import", severity=ErrorSeverity.CRITICAL, confidence=0.99
         )
-        result = patcher.generate(classification)
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", return_value=mock_response):
+            result = patcher.generate(classification)
 
         assert "import sqlite3" in result.patch_content
         assert result.generator.startswith("llm")
 
     def test_generate_patch_with_no_code_blocks(self):
         """Returns full response text when no code blocks found."""
-        mock_openai = Mock()
-        mock_response = Mock()
-        mock_response.choices = [
-            Mock(message=Mock(content="No code fix needed — just update the config file."))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+        mock_response = LLMResponse(
+            content="No code fix needed — just update the config file.",
+            tool_result={"score": 7, "reasoning": "Simple config fix"},
+        )
 
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
-        result = patcher.generate(make_classification())
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", return_value=mock_response):
+            result = patcher.generate(make_classification())
         assert result.patch_content == "No code fix needed — just update the config file."
 
     def test_generate_patch_extracts_largest_block(self):
         """When multiple code blocks, extracts the largest one."""
-        mock_openai = Mock()
-        mock_response = Mock()
         small_block = "```python\nx = 1\n```"
         large_block = "```python\n" + "\n".join(f"# line {i}" for i in range(50)) + "\n```"
-        mock_response.choices = [
-            Mock(message=Mock(content=f"{small_block}\n\n{large_block}"))
-        ]
-        mock_openai.chat.completions.create.return_value = mock_response
+        content = f"{small_block}\n\n{large_block}"
+        mock_response = LLMResponse(content=content, tool_result={"score": 8, "reasoning": "Good"})
 
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
-        result = patcher.generate(make_classification())
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", return_value=mock_response):
+            result = patcher.generate(make_classification())
         assert len(result.patch_content.splitlines()) > 3
         assert "line 0" in result.patch_content
 
     def test_generate_oob_error_propagates(self):
         """Non-LLM errors (not ConnectionError etc) propagate up."""
-        mock_openai = Mock()
-        mock_openai.chat.completions.create.side_effect = ValueError("Invalid model name")
-
         config = PatcherConfig(
             type="llm",
             llm=LLMConfig(provider="openai", model="gpt-4", api_key="sk-test"),
         )
         patcher = LLMPatcher(config)
-        patcher._client = mock_openai
 
-        # ValueError is in the caught set, so it should be handled gracefully
-        result = patcher.generate(make_classification())
+        with patch("selfheal.core.patchers.llm_patcher.call_structured", side_effect=LLMError("Invalid model name")):
+            result = patcher.generate(make_classification())
         assert "LLM generation failed" in result.patch_content
 
 
@@ -655,33 +614,25 @@ class TestFullPipelineWithLLM:
 
     def test_pipeline_with_llm_classifier_and_llm_patcher(self):
         """Full classify→patch→report pipeline with LLM components."""
-        mock_openai = Mock()
-
         # Classifier response
-        classify_resp = Mock()
-        classify_resp.choices = [
-            Mock(message=Mock(content=json.dumps({
-                "category": "runtime",
-                "severity": "high",
-                "confidence": 0.93,
-                "reasoning": "Database connection failure",
-            })))
-        ]
+        classify_data = {
+            "category": "runtime",
+            "severity": "high",
+            "confidence": 0.93,
+            "reasoning": "Database connection failure",
+        }
+        classify_resp = LLMResponse(content=json.dumps(classify_data), tool_result=classify_data)
 
-        # Patcher response  
-        patch_resp = Mock()
-        patch_resp.choices = [
-            Mock(message=Mock(content=(
-                "Fix the database connection:\n\n"
-                "```python\n"
-                "def connect_db():\n"
-                "    import sqlite3\n"
-                "    return sqlite3.connect(':memory:')\n"
-                "```"
-            )))
-        ]
-
-        mock_openai.chat.completions.create.side_effect = [classify_resp, patch_resp]
+        # Patcher response
+        patch_content = (
+            "Fix the database connection:\n\n"
+            "```python\n"
+            "def connect_db():\n"
+            "    import sqlite3\n"
+            "    return sqlite3.connect(':memory:')\n"
+            "```"
+        )
+        patch_resp = LLMResponse(content=patch_content, tool_result={"score": 8, "reasoning": "Good fix"})
 
         config = Config(
             classifier=ClassifierConfig(
@@ -695,11 +646,8 @@ class TestFullPipelineWithLLM:
         )
         engine = create_mock_engine(config)
 
-        # Use real LLM classifier and patcher with mock client
         classifier = LLMClassifier(config.classifier)
-        classifier._client = mock_openai
         patcher = LLMPatcher(config.patcher)
-        patcher._client = mock_openai
 
         engine.classifier = classifier
         engine.patcher = patcher
@@ -714,10 +662,11 @@ class TestFullPipelineWithLLM:
             error_message="no such table: users",
             traceback="sqlite3.OperationalError: no such table: users",
         )
-        result = engine.process_failure(failure)
 
-        # Classification was called
-        assert mock_openai.chat.completions.create.call_count >= 2
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", return_value=classify_resp), \
+             patch("selfheal.core.patchers.llm_patcher.call_structured", return_value=patch_resp):
+            result = engine.process_failure(failure)
+
         assert result is not None
 
 
@@ -730,9 +679,6 @@ class TestPipelineErrorRecoveryWithExternalComponents:
 
     def test_pipeline_continues_when_llm_classifier_unavailable(self):
         """Pipeline continues with fallback when LLM API is down."""
-        mock_openai = Mock()
-        mock_openai.chat.completions.create.side_effect = ConnectionError("API unavailable")
-
         config = Config(
             classifier=ClassifierConfig(
                 type="llm",
@@ -742,7 +688,6 @@ class TestPipelineErrorRecoveryWithExternalComponents:
         engine = create_mock_engine(config)
 
         classifier = LLMClassifier(config.classifier)
-        classifier._client = mock_openai
 
         engine.classifier = classifier
         engine.patcher = MagicMock()
@@ -752,7 +697,8 @@ class TestPipelineErrorRecoveryWithExternalComponents:
         engine.reporter = MagicMock()
         engine.store = MagicMock()
 
-        result = engine.process_failure(make_failure())
+        with patch("selfheal.core.classifiers.llm_classifier.call_structured", side_effect=LLMConnectionError("API unavailable")):
+            result = engine.process_failure(make_failure())
         # Pipeline should complete (classification falls back to unknown)
         assert result is not None
 

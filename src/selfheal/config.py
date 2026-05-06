@@ -84,6 +84,12 @@ class LLMConfig(BaseModel):
     anthropic_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     temperature: float = 0.1
+    max_retries: int = 3
+    retry_backoff: float = 2.0
+    enable_streaming: bool = False
+    enable_prompt_caching: bool = True
+    enable_tool_use: bool = True
+    timeout: int = 600
 
     @field_validator(
         "api_key", "base_url",

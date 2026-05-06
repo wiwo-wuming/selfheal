@@ -1,14 +1,14 @@
 interactions:
 - request:
-    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"Classify the following
-      test failure.\n\nError Type: AssertionError\nError Message: assert result ==
-      expected\n\nTraceback:\nTraceback (most recent call last):\n  File \"test_calc.py\",
-      line 5, in test_foo\n    assert 1 == 2\nAssertionError: assert 1 == 2\n\nCategories:
-      assertion, import, timeout, network, syntax, runtime, config, dependency, resource,
-      permission, flaky, value, type, memory, unknown\nSeverities: critical, high,
-      medium, low\n\nRespond with JSON:\n{\n    \"category\": \"<most likely category>\",\n    \"severity\":
-      \"<severity level>\",\n    \"confidence\": <0.0-1.0>,\n    \"reasoning\": \"<brief
-      explanation>\"\n}"}],"model":"claude-3-haiku-20240307"}'
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"Error Type: AssertionError\nError
+      Message: assert result == expected\n\nTraceback:\nTraceback (most recent call
+      last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert 1 == 2\nAssertionError:
+      assert 1 == 2"}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a test failure classifier. Analyze the error and classify it into the most
+      appropriate category.\n\nCategories: assertion, import, timeout, network, syntax,
+      runtime, config, dependency, resource, permission, flaky, value, type, memory,
+      unknown\nSeverities: critical, high, medium, low","cache_control":{"type":"ephemeral"}}],"temperature":0.0,"tool_choice":{"type":"tool","name":"classify_test_failure"},"tools":[{"name":"classify_test_failure","description":"Classify
+      a test failure into a category with severity and confidence.","input_schema":{"type":"object","properties":{"category":{"type":"string","enum":["assertion","import","timeout","network","syntax","runtime","config","dependency","resource","permission","flaky","value","type","memory","unknown"]},"severity":{"type":"string","enum":["critical","high","medium","low"]},"confidence":{"type":"number","minimum":0.0,"maximum":1.0},"reasoning":{"type":"string"}},"required":["category","severity","confidence","reasoning"]}}]}'
     headers:
       Accept:
       - application/json
@@ -17,11 +17,11 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '729'
+      - '1327'
       Content-Type:
       - application/json
       Host:
-      - api.deepseek.com
+      - token-plan-cn.xiaomimimo.com
       User-Agent:
       - Anthropic/Python 0.97.0
       X-Stainless-Arch:
@@ -45,43 +45,192 @@ interactions:
       x-stainless-timeout:
       - '600'
     method: POST
-    uri: https://api.deepseek.com/anthropic/v1/messages
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
   response:
     body:
-      string: '{"id":"677ad4c0-54e9-4f13-b859-54947e7a37c8","type":"message","role":"assistant","model":"deepseek-v4-flash","content":[{"type":"text","text":"{\n    \"category\":
-        \"value\",\n    \"severity\": \"low\",\n    \"confidence\": 0.95,\n    \"reasoning\":
-        \"The error is a simple assertion that 1 == 2, which is a comparison of integer
-        values that will always fail. This is a value mismatch error, not related
-        to imports, timeouts, or other categories. The severity is low because it
-        appears to be a basic test logic error or placeholder assertion.\"\n}"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":167,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":94,"service_tier":"standard"}}'
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
     headers:
-      Age:
-      - '0'
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
       Connection:
       - keep-alive
+      Content-Length:
+      - '139'
       Content-Type:
       - application/json
       Date:
-      - Sun, 03 May 2026 02:55:08 GMT
-      EO-Cache-Status:
-      - MISS
-      EO-LOG-UUID:
-      - '7519424676398039524'
+      - Wed, 06 May 2026 08:46:56 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
       Server:
-      - openresty
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Transfer-Encoding:
-      - chunked
-      X-Content-Type-Options:
-      - nosniff
-      access-control-allow-credentials:
-      - 'true'
-      vary:
-      - origin, access-control-request-method, access-control-request-headers
-      x-ds-trace-id:
-      - c804a7a1a62a52883bfb6434ec487c65
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
     status:
-      code: 200
-      message: OK
+      code: 400
+      message: Bad Request
+- request:
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"Error Type: AssertionError\nError
+      Message: assert result == expected\n\nTraceback:\nTraceback (most recent call
+      last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert 1 == 2\nAssertionError:
+      assert 1 == 2"}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a test failure classifier. Analyze the error and classify it into the most
+      appropriate category.\n\nCategories: assertion, import, timeout, network, syntax,
+      runtime, config, dependency, resource, permission, flaky, value, type, memory,
+      unknown\nSeverities: critical, high, medium, low","cache_control":{"type":"ephemeral"}}],"temperature":0.0,"tool_choice":{"type":"tool","name":"classify_test_failure"},"tools":[{"name":"classify_test_failure","description":"Classify
+      a test failure into a category with severity and confidence.","input_schema":{"type":"object","properties":{"category":{"type":"string","enum":["assertion","import","timeout","network","syntax","runtime","config","dependency","resource","permission","flaky","value","type","memory","unknown"]},"severity":{"type":"string","enum":["critical","high","medium","low"]},"confidence":{"type":"number","minimum":0.0,"maximum":1.0},"reasoning":{"type":"string"}},"required":["category","severity","confidence","reasoning"]}}]}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1327'
+      Content-Type:
+      - application/json
+      Host:
+      - token-plan-cn.xiaomimimo.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
+  response:
+    body:
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
+    headers:
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '139'
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 06 May 2026 08:46:57 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Server:
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
+    status:
+      code: 400
+      message: Bad Request
+- request:
+    body: '{"max_tokens":1024,"messages":[{"role":"user","content":"Error Type: AssertionError\nError
+      Message: assert result == expected\n\nTraceback:\nTraceback (most recent call
+      last):\n  File \"test_calc.py\", line 5, in test_foo\n    assert 1 == 2\nAssertionError:
+      assert 1 == 2"}],"model":"deepseek-chat","system":[{"type":"text","text":"You
+      are a test failure classifier. Analyze the error and classify it into the most
+      appropriate category.\n\nCategories: assertion, import, timeout, network, syntax,
+      runtime, config, dependency, resource, permission, flaky, value, type, memory,
+      unknown\nSeverities: critical, high, medium, low","cache_control":{"type":"ephemeral"}}],"temperature":0.0,"tool_choice":{"type":"tool","name":"classify_test_failure"},"tools":[{"name":"classify_test_failure","description":"Classify
+      a test failure into a category with severity and confidence.","input_schema":{"type":"object","properties":{"category":{"type":"string","enum":["assertion","import","timeout","network","syntax","runtime","config","dependency","resource","permission","flaky","value","type","memory","unknown"]},"severity":{"type":"string","enum":["critical","high","medium","low"]},"confidence":{"type":"number","minimum":0.0,"maximum":1.0},"reasoning":{"type":"string"}},"required":["category","severity","confidence","reasoning"]}}]}'
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1327'
+      Content-Type:
+      - application/json
+      Host:
+      - token-plan-cn.xiaomimimo.com
+      User-Agent:
+      - Anthropic/Python 0.97.0
+      X-Stainless-Arch:
+      - other:amd64
+      X-Stainless-Async:
+      - 'false'
+      X-Stainless-Lang:
+      - python
+      X-Stainless-OS:
+      - Windows
+      X-Stainless-Package-Version:
+      - 0.97.0
+      X-Stainless-Runtime:
+      - CPython
+      X-Stainless-Runtime-Version:
+      - 3.14.3
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
+  response:
+    body:
+      string: "{\n    \"error\": {\n        \"code\": \"400\",\n        \"message\":
+        \"Not supported model deepseek-chat\",\n        \"param\": \"Param Incorrect\"\n
+        \   }\n}\n"
+    headers:
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '139'
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 06 May 2026 08:46:59 GMT
+      Expires:
+      - '0'
+      Pragma:
+      - no-cache
+      Server:
+      - MiFE/3.4.34
+      Vary:
+      - Origin
+      - Access-Control-Request-Method
+      - Access-Control-Request-Headers
+      X-MiFE-Upstream-Status:
+      - '400'
+    status:
+      code: 400
+      message: Bad Request
 version: 1
