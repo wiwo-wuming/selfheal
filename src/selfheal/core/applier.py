@@ -10,12 +10,10 @@ from pathlib import Path
 from typing import Optional
 
 from selfheal.config import EngineConfig
+from selfheal.core.diff_parser import is_unified_diff, parse_and_apply_diff
 from selfheal.events import PatchEvent
 
 logger = logging.getLogger(__name__)
-
-# Number of initial lines to inspect for unified-diff format detection
-_DIFF_DETECT_LINES = 20
 
 BACKUP_INDEX_FILE = ".selfheal/backup_index.json"
 
@@ -62,7 +60,7 @@ class PatchApplier:
             # Determine patch strategy
             content = patch.patch_content
 
-            if self._is_unified_diff(content):
+            if is_unified_diff(content):
                 success = self._apply_diff(target_path, content)
             else:
                 success = self._apply_replacement(target_path, content)
@@ -136,15 +134,6 @@ class PatchApplier:
             shutil.copy2(str(backup), str(target))
             logger.info(f"Rolled back {target} from {backup}")
 
-    @staticmethod
-    def _is_unified_diff(content: str) -> bool:
-        """Check if content looks like a unified diff."""
-        lines = content.strip().split("\n")
-        return any(
-            line.startswith(("--- ", "+++ ", "@@ ", "diff --git"))
-            for line in lines[:_DIFF_DETECT_LINES]
-        )
-
     def _apply_diff(self, target_path: Path, diff_content: str) -> bool:
         """Apply a unified diff patch."""
         try:
@@ -152,7 +141,7 @@ class PatchApplier:
             original_lines = original.splitlines(keepends=True)
 
             # Parse the unified diff into hunks and apply
-            patched_lines = self._apply_unified_diff(original_lines, diff_content)
+            patched_lines = parse_and_apply_diff(original_lines, diff_content)
 
             if patched_lines is None:
                 logger.warning("Failed to parse/apply unified diff, falling back to subprocess patch")
@@ -165,82 +154,6 @@ class PatchApplier:
         except Exception as e:
             logger.warning(f"Diff application failed: {e}")
             return False
-
-    def _apply_unified_diff(
-        self, original_lines: list[str], diff_content: str
-    ) -> Optional[list[str]]:
-        """Parse and apply a unified diff manually.
-
-        Returns the patched lines, or None if parsing fails.
-        """
-        diff_lines = diff_content.splitlines(keepends=True)
-
-        # Find hunks starting with @@ -a,b +c,d @@
-        hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
-        result = list(original_lines)  # copy
-        offset = 0  # track cumulative line offset from previous hunks
-
-        i = 0
-        while i < len(diff_lines):
-            line = diff_lines[i]
-
-            # Skip diff header lines
-            if line.startswith(("---", "+++", "diff ")):
-                i += 1
-                continue
-
-            # Parse hunk header
-            match = hunk_header_re.match(line)
-            if not match:
-                i += 1
-                continue
-
-            old_start = int(match.group(1))
-            old_count = int(match.group(2)) if match.group(2) is not None else 1
-
-            i += 1  # move past hunk header
-            remove_count = 0
-            add_count = 0
-            additions = []
-            line_idx = 0
-
-            # Process lines in this hunk
-            while i < len(diff_lines) and line_idx < old_count + 100:
-                if i >= len(diff_lines):
-                    break
-                hline = diff_lines[i]
-
-                # Check if we've reached the next hunk or diff header
-                if hline.startswith("@@") or hline.startswith("diff ") or hline.startswith("--- "):
-                    break
-
-                if hline.startswith("+"):
-                    # Addition line
-                    additions.append(hline[1:])
-                    add_count += 1
-                elif hline.startswith("-"):
-                    # Removal line (skip from original)
-                    remove_count += 1
-                elif hline.startswith(" "):
-                    # Context line
-                    additions.append(hline[1:])
-                elif hline.startswith("\\"):
-                    # "\ No newline at end of file" — skip
-                    pass
-                else:
-                    # Treat as context if no prefix
-                    additions.append(hline)
-
-                i += 1
-                line_idx += 1
-
-            # Apply this hunk: replace old_start-1..old_start+old_count-1 with additions
-            insert_pos = old_start - 1 + offset
-            result[insert_pos:insert_pos + old_count] = additions
-            offset += len(additions) - old_count
-
-        return result
 
     def _apply_diff_subprocess(self, target_path: Path, diff_content: str) -> bool:
         """Apply a unified diff using the system 'patch' command as fallback."""
@@ -337,7 +250,7 @@ class PatchApplier:
             return f"[dry-run] Target file not found: {target}"
 
         content = patch.patch_content
-        if self._is_unified_diff(content):
+        if is_unified_diff(content):
             return self._preview_diff(target_path, content)
         else:
             return self._preview_replacement(target_path, content)

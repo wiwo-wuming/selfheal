@@ -248,88 +248,54 @@ class TemplatePatcher(PatcherInterface):
         }
 
     def generate(self, classification: ClassificationEvent) -> PatchEvent:
-        """Generate a patch using templates, with experience-based reuse.
+        """Generate a patch using templates or registered strategies.
 
-        Strategy:
         1. Check the experience store for a previously successful patch.
-        2. If no experience match, fall back to template-based generation.
+        2. Delegate to the registered strategy for this error category.
+        3. Fall back to generic template-based patch.
         """
         # --- try experience-based reuse first ---
         experience_patch = self._try_experience_patch(classification)
         if experience_patch is not None:
             return experience_patch
 
-        # --- template-based generation ---
+        # --- delegate to registered strategy ---
+        from .strategies import get_strategy
+
+        strategy = get_strategy(classification.category)
+        if strategy is not None:
+            return strategy.generate(classification, self)
+
+        # --- fallback: generic template or hardcoded patch ---
         category = classification.category
         templates_dir = self._templates_dir
+        template_path = templates_dir / "_generic.py.j2"
 
-        # Import category: use smart typo-aware patch builder (bypass Jinja2)
-        if category == "import":
-            ctx = self._build_template_context(classification)
-            event = classification.original_event
-            tb_info = _parse_traceback(event.traceback)
-            err_info = _parse_error_message(event.error_message, event.error_type)
-            target_file = tb_info.get("error_file") or event.test_path
-            error_line = tb_info.get("error_line") or 1
-            original_code = tb_info.get("original_code") or ""
-            content = self._build_import_patch(
-                str(target_file), error_line, original_code,
-                err_info.get("typo_suggestion"),
-                err_info.get("missing_module", "unknown_module"),
-                err_info.get("source_module"),
-            )
-            return PatchEvent(
-                classification_event=classification,
-                patch_id=str(uuid.uuid4()),
-                patch_content=content,
-                generator="template",
-                target_file=ctx.get("target_file"),
-            )
+        if template_path.exists():
+            try:
+                env = self._get_env()
+                rel_path = template_path.relative_to(templates_dir).as_posix()
+                template = env.get_template(rel_path)
+                ctx = self._build_template_context(classification)
+                content = template.render(**ctx)
+                return PatchEvent(
+                    classification_event=classification,
+                    patch_id=str(uuid.uuid4()),
+                    patch_content=content,
+                    generator="template",
+                    target_file=ctx.get("target_file"),
+                )
+            except Exception as e:
+                logger.error(f"Template rendering failed: {e}")
 
-        # Look for template in category subdirectory
-        template_path = templates_dir / category / "default.py.j2"
-
-        # Fall back to generic template
-        if not template_path.exists():
-            template_path = templates_dir / "_generic.py.j2"
-
-        if not template_path.exists():
-            logger.warning(f"No template found for category: {category}")
-            fallback_content, fallback_target = self._generate_fallback_patch(classification)
-            return PatchEvent(
-                classification_event=classification,
-                patch_id=str(uuid.uuid4()),
-                patch_content=fallback_content,
-                generator="template",
-                target_file=fallback_target,
-            )
-
-        try:
-            env = self._get_env()
-            # Use POSIX-style path separators for Jinja2 FileSystemLoader
-            rel_path = template_path.relative_to(templates_dir).as_posix()
-            template = env.get_template(rel_path)
-            ctx = self._build_template_context(classification)
-            content = template.render(**ctx)
-
-            # Also pass target_file to PatchEvent so PatchApplier knows where to apply
-            return PatchEvent(
-                classification_event=classification,
-                patch_id=str(uuid.uuid4()),
-                patch_content=content,
-                generator="template",
-                target_file=ctx.get("target_file"),
-            )
-        except Exception as e:
-            logger.error(f"Template rendering failed: {e}")
-            fallback_content, fallback_target = self._generate_fallback_patch(classification)
-            return PatchEvent(
-                classification_event=classification,
-                patch_id=str(uuid.uuid4()),
-                patch_content=fallback_content,
-                generator="template",
-                target_file=fallback_target,
-            )
+        fallback_content, fallback_target = self._generate_fallback_patch(classification)
+        return PatchEvent(
+            classification_event=classification,
+            patch_id=str(uuid.uuid4()),
+            patch_content=fallback_content,
+            generator="template",
+            target_file=fallback_target,
+        )
 
     @staticmethod
     def _try_experience_patch(classification: ClassificationEvent) -> Optional[PatchEvent]:

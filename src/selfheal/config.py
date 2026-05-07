@@ -9,6 +9,12 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 

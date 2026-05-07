@@ -8,6 +8,7 @@ import pytest
 
 from selfheal.config import EngineConfig
 from selfheal.core.applier import PatchApplier
+from selfheal.core.diff_parser import is_unified_diff
 from selfheal.events import (
     ClassificationEvent,
     ErrorSeverity,
@@ -142,8 +143,8 @@ class TestPatchApplier:
 @@ -1,3 +1,3 @@
 -old
 +new"""
-        assert PatchApplier._is_unified_diff(diff) is True
-        assert PatchApplier._is_unified_diff("just code") is False
+        assert is_unified_diff(diff) is True
+        assert is_unified_diff("just code") is False
 
     def test_get_backup_path(self, applier, target_file):
         """Test retrieving backup path by patch ID."""
