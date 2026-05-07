@@ -6,6 +6,7 @@ import json
 import logging
 import time
 import urllib.request
+import uuid as _uuid
 from datetime import datetime
 from typing import Optional
 
@@ -43,17 +44,18 @@ class WebhookReporter(ReporterInterface):
             return secret.strip()
         return None
 
-    def _compute_signature(self, payload_bytes: bytes) -> str:
-        """Compute HMAC-SHA256 signature for the payload.
+    def _compute_signature(self, timestamp: str, nonce: str, payload_bytes: bytes) -> str:
+        """Compute HMAC-SHA256 over timestamp, nonce, and payload.
 
         Returns the hex-encoded signature string, or empty if no secret configured.
         """
         if not self.webhook_secret:
             return ""
 
+        message = f"{timestamp}.{nonce}.".encode("utf-8") + payload_bytes
         mac = hmac.new(
             self.webhook_secret.encode("utf-8"),
-            payload_bytes,
+            message,
             hashlib.sha256,
         )
         return mac.hexdigest()
@@ -99,17 +101,25 @@ class WebhookReporter(ReporterInterface):
                 {"title": "Error", "value": event.error_message[:500], "short": False}
             )
 
+        # Anti-replay: timestamp + unique nonce
+        timestamp = str(int(time.time()))
+        nonce = _uuid.uuid4().hex
+
         last_error = None
         for attempt in range(_MAX_RETRIES):
             try:
                 data = json.dumps(payload).encode("utf-8")
-                headers = {"Content-Type": "application/json"}
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-SelfHeal-Timestamp": timestamp,
+                    "X-SelfHeal-Nonce": nonce,
+                }
 
-                # Add HMAC signature if secret is configured
-                signature = self._compute_signature(data)
+                # HMAC signature over timestamp + nonce + payload
+                signature = self._compute_signature(timestamp, nonce, data)
                 if signature:
                     headers["X-SelfHeal-Signature"] = f"sha256={signature}"
-                    logger.debug("Webhook request signed with HMAC-SHA256")
+                    logger.debug("Webhook signed with HMAC-SHA256 (ts=%s, nonce=%s)", timestamp, nonce[:8])
 
                 req = urllib.request.Request(
                     self.webhook_url,
@@ -135,3 +145,41 @@ class WebhookReporter(ReporterInterface):
                         f"Webhook notification failed after "
                         f"{_MAX_RETRIES} attempts: {last_error}"
                     )
+
+    @staticmethod
+    def verify_request(
+        secret: str,
+        body: bytes,
+        signature_header: str,
+        timestamp_header: str,
+        nonce_header: str,
+        max_age_seconds: int = 300,
+        seen_nonces: Optional[set] = None,
+    ) -> bool:
+        """Verify webhook request integrity (anti-replay + anti-tamper).
+
+        Returns True if the request is not replayed, not tampered, and not expired.
+        """
+        # 1. Timestamp freshness check
+        try:
+            ts = int(timestamp_header)
+        except (ValueError, TypeError):
+            return False
+        if abs(int(time.time()) - ts) > max_age_seconds:
+            return False
+
+        # 2. Nonce uniqueness check
+        if seen_nonces is not None:
+            if nonce_header in seen_nonces:
+                return False
+            seen_nonces.add(nonce_header)
+
+        # 3. Signature verification (constant-time compare)
+        if not signature_header.startswith("sha256="):
+            return False
+        expected = signature_header[len("sha256="):]
+        message = f"{timestamp_header}.{nonce_header}.".encode("utf-8") + body
+        computed = hmac.new(
+            secret.encode("utf-8"), message, hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(computed, expected)

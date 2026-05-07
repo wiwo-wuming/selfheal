@@ -60,6 +60,24 @@ class HybridClassifier(ClassifierInterface):
     def classify(self, event: TestFailureEvent) -> ClassificationEvent:
         """Classify with rules first, fall back to LLM if needed."""
 
+        # --- Rule result cache: skip regex matching on repeated errors ---
+        cache_enabled = self.llm_classifier is not None and getattr(self.config, "cache_enabled", True)
+        cache_key = None
+        if cache_enabled:
+            from selfheal.core.cache import get_cache
+            cache = get_cache()
+            cache_key = cache.make_key(event)
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Hybrid: cache hit (category=%s)", cached.get("category"))
+                return ClassificationEvent(
+                    original_event=event,
+                    category=cached["category"],
+                    severity=ErrorSeverity(cached["severity"]),
+                    confidence=float(cached["confidence"]),
+                    reasoning=f"[rule-cached] {cached.get('reasoning', '')}",
+                )
+
         # Step 1: Try rule-based classification
         rule_result = self.rule_classifier.classify(event)
 
@@ -72,6 +90,16 @@ class HybridClassifier(ClassifierInterface):
                 "Hybrid: rule match (category=%s, confidence=%.2f) → skip LLM",
                 rule_result.category, rule_result.confidence,
             )
+            # --- Cache the rule result ---
+            if cache_enabled:
+                from selfheal.core.cache import get_cache
+                cache = get_cache()
+                cache.set(cache_key or cache.make_key(event), {
+                    "category": rule_result.category,
+                    "severity": rule_result.severity.value,
+                    "confidence": rule_result.confidence,
+                    "reasoning": rule_result.reasoning,
+                })
             rule_result.reasoning = f"[rule] {rule_result.reasoning}"
             return rule_result
 

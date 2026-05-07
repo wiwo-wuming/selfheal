@@ -27,6 +27,11 @@ def make_event(error_type="AssertionError", error_message="assert 1 == 2"):
 class TestHybridClassifier:
     """Unit tests for HybridClassifier."""
 
+    def setup_method(self):
+        """Reset cache before each test to avoid cross-test pollution."""
+        from selfheal.core.cache import reset_cache
+        reset_cache()
+
     def test_rule_high_confidence_skips_llm(self):
         """When rule confidence >= threshold, LLM is NOT called."""
         config = ClassifierConfig(
