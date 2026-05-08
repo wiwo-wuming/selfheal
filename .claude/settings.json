@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(mypy *)"
+    ]
+  }
+}

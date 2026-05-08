@@ -101,13 +101,12 @@ class WebhookReporter(ReporterInterface):
                 {"title": "Error", "value": event.error_message[:500], "short": False}
             )
 
-        # Anti-replay: timestamp + unique nonce
-        timestamp = str(int(time.time()))
-        nonce = _uuid.uuid4().hex
-
         last_error = None
         for attempt in range(_MAX_RETRIES):
             try:
+                # Anti-replay: fresh timestamp + unique nonce per attempt
+                timestamp = str(int(time.time()))
+                nonce = _uuid.uuid4().hex
                 data = json.dumps(payload).encode("utf-8")
                 headers = {
                     "Content-Type": "application/json",

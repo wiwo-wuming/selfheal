@@ -1,4 +1,4 @@
-"""SelfHeal Dashboard — 监控面板风格，深色主题，纯 Canvas 手绘图表，入场动画。"""
+"""SelfHeal Dashboard — 监控面板风格，深色主题，Chart.js 图表，入场动画。"""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* ═══════════════════════ CSS Variables ═══════════════════════ */
 :root {
@@ -321,130 +322,78 @@ let currentPatchId = null;
 let statsData = null;
 let patchesData = [];
 
-/* ═══════════════════════ Canvas Charts ═══════════════════════ */
-const PALETTE = ['#39d353','#58a6ff','#e3b341','#f85149','#bc8cff','#f778ba','#79c0ff','#56d364'];
-
+/* ═══════════════════════ Chart.js Charts ═══════════════════════ */
+let trendChart = null;
 function drawTrendChart(canvas, trend) {
   const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const W = rect.width, H = 280;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
-  ctx.clearRect(0,0,W,H);
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  if (!trend || !trend.length) return;
 
-  if (!trend || !trend.length) {
-    ctx.fillStyle = '#5a6680'; ctx.font = '13px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('No trend data yet', W/2, H/2);
-    return;
-  }
-
-  const pad = { top: 20, right: 30, bottom: 40, left: 50 };
-  const pw = W - pad.left - pad.right, ph = H - pad.top - pad.bottom;
-  const n = trend.length;
-  const maxVal = Math.max(...trend.map(t=>Math.max(t.total_experiences||0, t.total_successes||0)), 1);
-
-  // Grid lines
-  ctx.strokeStyle = 'rgba(30,38,84,0.5)'; ctx.lineWidth = 1;
-  for (let i=0; i<=4; i++) {
-    const y = pad.top + (ph/4)*i;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W-pad.right, y); ctx.stroke();
-    ctx.fillStyle = '#5a6680'; ctx.font = '10px JetBrains Mono'; ctx.textAlign = 'right';
-    ctx.fillText(Math.round(maxVal*(1-i/4)), pad.left-8, y+4);
-  }
-
-  // X labels
-  ctx.textAlign = 'center'; ctx.fillStyle = '#5a6680'; ctx.font = '10px Inter';
-  const step = Math.max(1, Math.floor(n/6));
-  for (let i=0; i<n; i+=step) {
-    const x = pad.left + (pw/(n-1))*i;
-    const label = (trend[i].snapshot_date || '').slice(5);
-    ctx.fillText(label, x, H - pad.bottom + 18);
-  }
-
-  function line(data, color, glowColor) {
-    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2;
-    for (let i=0; i<n; i++) {
-      const x = pad.left + (pw/(n-1))*i;
-      const y = pad.top + ph - (data[i]/maxVal)*ph;
-      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top+ph);
-    grad.addColorStop(0, glowColor); grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.lineTo(pad.left + pw, pad.top + ph);
-    ctx.lineTo(pad.left, pad.top + ph); ctx.closePath();
-    ctx.fillStyle = grad; ctx.fill();
-
-    // Dots
-    for (let i=0; i<n; i++) {
-      const x = pad.left + (pw/(n-1))*i;
-      const y = pad.top + ph - (data[i]/maxVal)*ph;
-      ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
-    }
-  }
-
-  line(trend.map(t=>t.total_experiences||0), '#58a6ff', 'rgba(88,166,255,0.25)');
-  line(trend.map(t=>t.total_successes||0), '#39d353', 'rgba(57,211,83,0.25)');
-
-  // Legend
-  const lx = W/2 - 80, ly = 10;
-  [{c:'#58a6ff',l:'Fixes Learned'},{c:'#39d353',l:'Successes'}].forEach((e,i)=>{
-    ctx.fillStyle = e.c; ctx.fillRect(lx + i*100, ly, 10, 10);
-    ctx.fillStyle = '#a0aec0'; ctx.font = '11px Inter'; ctx.textAlign = 'start';
-    ctx.fillText(e.l, lx + i*100 + 14, ly+10);
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trend.map(t => (t.snapshot_date || '').slice(5)),
+      datasets: [
+        {
+          label: 'Fixes Learned',
+          data: trend.map(t => t.total_experiences || 0),
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.1)',
+          fill: true, tension: 0.3,
+          pointRadius: 3, pointBackgroundColor: '#58a6ff',
+        },
+        {
+          label: 'Successes',
+          data: trend.map(t => t.total_successes || 0),
+          borderColor: '#39d353',
+          backgroundColor: 'rgba(57,211,83,0.1)',
+          fill: true, tension: 0.3,
+          pointRadius: 3, pointBackgroundColor: '#39d353',
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { labels: { color: '#a0aec0', font: { size: 11 }, padding: 16, usePointStyle: true } },
+        tooltip: { backgroundColor: '#131837', titleColor: '#e8ecf4', bodyColor: '#a0aec0', borderColor: '#1e2654', borderWidth: 1 },
+      },
+      scales: {
+        x: { ticks: { color: '#5a6680', font: { size: 10 }, maxTicksLimit: 7 }, grid: { color: 'rgba(30,38,84,0.5)' } },
+        y: { ticks: { color: '#5a6680', font: { size: 10 } }, grid: { color: 'rgba(30,38,84,0.5)' }, beginAtZero: true },
+      },
+    },
   });
 }
 
+let pieChart = null;
 function drawPieChart(canvas, breakdown) {
   const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const W = rect.width, H = 280;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
-  ctx.clearRect(0,0,W,H);
-
+  if (pieChart) { pieChart.destroy(); pieChart = null; }
   const entries = Object.entries(breakdown || {});
-  if (!entries.length) {
-    ctx.fillStyle = '#5a6680'; ctx.font = '13px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('No category data yet', W/2, H/2);
-    return;
-  }
+  if (!entries.length) return;
 
-  const total = entries.reduce((s,e)=>s+e[1], 0);
-  const cx = W * 0.38, cy = H/2, r = Math.min(cx-40, H/2-20);
-  let angle = -Math.PI/2;
-
-  entries.forEach(([label, val], i) => {
-    const slice = (val/total) * Math.PI*2;
-    ctx.beginPath(); ctx.moveTo(cx,cy);
-    ctx.arc(cx, cy, r, angle, angle + slice);
-    ctx.closePath();
-    ctx.fillStyle = PALETTE[i % PALETTE.length]; ctx.fill();
-    ctx.strokeStyle = '#0f1326'; ctx.lineWidth = 2; ctx.stroke();
-    angle += slice;
-  });
-
-  // Center text
-  ctx.fillStyle = '#e8ecf4'; ctx.font = '600 20px JetBrains Mono'; ctx.textAlign = 'center';
-  ctx.fillText(total, cx, cy-2);
-  ctx.fillStyle = '#5a6680'; ctx.font = '11px Inter';
-  ctx.fillText('Categories', cx, cy+16);
-
-  // Right legend
-  const lx = cx + r + 30;
-  entries.forEach(([label, val], i) => {
-    const y = 30 + i*28;
-    ctx.fillStyle = PALETTE[i % PALETTE.length]; ctx.fillRect(lx, y-5, 10, 10);
-    ctx.fillStyle = '#a0aec0'; ctx.font = '11px Inter'; ctx.textAlign = 'start';
-    ctx.fillText(label, lx+16, y+4);
-    ctx.fillStyle = '#5a6680'; ctx.font = '10px JetBrains Mono';
-    ctx.fillText('('+val+')', lx+16+ctx.measureText(label).width+6, y+4);
+  const palette = ['#39d353','#58a6ff','#e3b341','#f85149','#bc8cff','#f778ba','#79c0ff','#56d364'];
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(e => e[0]),
+      datasets: [{
+        data: entries.map(e => e[1]),
+        backgroundColor: entries.map((_, i) => palette[i % palette.length]),
+        borderColor: '#0f1326',
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#a0aec0', font: { size: 11 }, padding: 16, usePointStyle: true } },
+        tooltip: { backgroundColor: '#131837', titleColor: '#e8ecf4', bodyColor: '#a0aec0', borderColor: '#1e2654', borderWidth: 1 },
+      },
+    },
   });
 }
 
@@ -552,10 +501,6 @@ function escHtml(s) { const d=document.createElement('div'); d.textContent=s||''
 function escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function refreshAll() { loadStats(); loadPatches(); }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
-window.addEventListener('resize', () => { if(statsData) {
-  drawTrendChart(document.getElementById('trendCanvas'), statsData.trend||[]);
-  drawPieChart(document.getElementById('pieCanvas'), statsData.category_breakdown||{});
-}});
 setInterval(refreshAll, 10000);
 refreshAll();
 </script>

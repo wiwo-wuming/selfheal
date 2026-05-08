@@ -6,6 +6,7 @@ of duplicated hunk-parsing code.
 
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -138,6 +139,8 @@ def apply_patch_to_file(target: Path, patch_content: str) -> bool:
 
 def _system_patch(target: Path, patch_content: str) -> bool:
     """Apply a unified diff using the system ``patch`` command as fallback."""
+    if sys.platform == "win32":
+        return False
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".patch", delete=False, encoding="utf-8"

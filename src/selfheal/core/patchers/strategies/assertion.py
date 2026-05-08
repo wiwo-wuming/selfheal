@@ -7,4 +7,4 @@ from .base import TemplateRenderStrategy
 class AssertionStrategy(TemplateRenderStrategy):
     """Generates patches for assertion errors using Jinja2 templates."""
 
-    category = ErrorCategory.ASSERTION
+    category: ErrorCategory = ErrorCategory.ASSERTION

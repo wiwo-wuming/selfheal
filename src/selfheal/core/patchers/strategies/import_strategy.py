@@ -21,7 +21,7 @@ class ImportStrategy(PatchStrategy):
     3. **Missing top-level**: add ``import missing_module``.
     """
 
-    category = ErrorCategory.IMPORT
+    category: ErrorCategory = ErrorCategory.IMPORT
 
     def generate(
         self, classification: ClassificationEvent, patcher: "TemplatePatcher"

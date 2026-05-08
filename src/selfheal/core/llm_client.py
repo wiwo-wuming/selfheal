@@ -11,6 +11,7 @@ the Anthropic SDK (client.mjs → credentials.mjs → api-promise.mjs).
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -166,6 +167,7 @@ class LLMClientFactory:
     """
 
     _cache: dict[str, Any] = {}
+    _lock = threading.Lock()
 
     @classmethod
     def _key(cls, provider: str, base_url: Optional[str]) -> str:
@@ -175,40 +177,42 @@ class LLMClientFactory:
     def get_client(cls, llm_config: Any) -> Any:
         """Return a cached client instance for the given *llm_config*."""
         key = cls._key(llm_config.provider, llm_config.base_url)
-        if key in cls._cache:
-            return cls._cache[key]
+        with cls._lock:
+            if key in cls._cache:
+                return cls._cache[key]
 
-        provider = llm_config.provider.lower()
-        api_key = llm_config.get_api_key()
+            provider = llm_config.provider.lower()
+            api_key = llm_config.get_api_key()
 
-        if provider in ("openai", "deepseek"):
-            try:
-                from openai import OpenAI
-            except ImportError:
-                raise ImportError(
-                    "openai package not installed. Run: pip install selfheal[llm]"
-                )
-            client = OpenAI(api_key=api_key, base_url=llm_config.base_url)
+            if provider in ("openai", "deepseek"):
+                try:
+                    from openai import OpenAI
+                except ImportError:
+                    raise ImportError(
+                        "openai package not installed. Run: pip install selfheal[llm]"
+                    )
+                client = OpenAI(api_key=api_key, base_url=llm_config.base_url)
 
-        elif provider == "anthropic":
-            try:
-                from anthropic import Anthropic
-            except ImportError:
-                raise ImportError(
-                    "anthropic package not installed. Run: pip install selfheal[llm]"
-                )
-            client = Anthropic(api_key=api_key)
+            elif provider == "anthropic":
+                try:
+                    from anthropic import Anthropic
+                except ImportError:
+                    raise ImportError(
+                        "anthropic package not installed. Run: pip install selfheal[llm]"
+                    )
+                client = Anthropic(api_key=api_key)
 
-        else:
-            raise ValueError(f"Unknown LLM provider: {provider}")
+            else:
+                raise ValueError(f"Unknown LLM provider: {provider}")
 
-        cls._cache[key] = client
-        return client
+            cls._cache[key] = client
+            return client
 
     @classmethod
     def reset(cls) -> None:
         """Clear the client cache (useful in tests)."""
-        cls._cache.clear()
+        with cls._lock:
+            cls._cache.clear()
 
 
 # ---------------------------------------------------------------------------

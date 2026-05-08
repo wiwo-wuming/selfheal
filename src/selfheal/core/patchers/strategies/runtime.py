@@ -10,4 +10,4 @@ class RuntimeStrategy(TemplateRenderStrategy):
     Covers RUNTIME, TYPE, VALUE, and SYNTAX categories.
     """
 
-    category = ErrorCategory.RUNTIME
+    category: ErrorCategory = ErrorCategory.RUNTIME

@@ -11,4 +11,4 @@ class FallbackStrategy(TemplateRenderStrategy):
     FLAKY, MEMORY, and UNKNOWN categories.
     """
 
-    category = ErrorCategory.UNKNOWN
+    category: ErrorCategory = ErrorCategory.UNKNOWN
