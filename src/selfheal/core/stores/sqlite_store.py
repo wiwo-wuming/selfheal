@@ -5,15 +5,15 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from selfheal.config import StoreConfig
 from selfheal.events import (
-    TestFailureEvent,
     ClassificationEvent,
-    PatchEvent,
-    ValidationEvent,
     ErrorSeverity,
+    PatchEvent,
+    TestFailureEvent,
+    ValidationEvent,
 )
 from selfheal.interfaces.store import StoreInterface
 
@@ -26,7 +26,7 @@ class SQLiteStore(StoreInterface):
     def __init__(self, config: StoreConfig):
         self.config = config
         self.db_path = Path(config.db_path)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self) -> None:
@@ -116,7 +116,7 @@ class SQLiteStore(StoreInterface):
         }
         return type_map.get(type(event), "unknown")
 
-    def _deserialize_event(self, event_type: str, data: dict) -> Optional[Any]:
+    def _deserialize_event(self, event_type: str, data: dict[str, Any]) -> Any | None:
         """Deserialize event from dict."""
         if event_type == "failure":
             return TestFailureEvent(
@@ -163,7 +163,7 @@ class SQLiteStore(StoreInterface):
             patch_data = data.get("patch_event", {})
             patch = self._deserialize_event("patch", patch_data)
             if patch is None:
-                logger.warning(f"Failed to deserialize patch for validation event")
+                logger.warning("Failed to deserialize patch for validation event")
                 return None
             return ValidationEvent(
                 patch_event=patch,

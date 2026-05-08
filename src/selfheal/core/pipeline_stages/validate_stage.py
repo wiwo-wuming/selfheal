@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfheal.events import (
     ClassificationEvent,
@@ -36,10 +36,10 @@ class ValidateStage(PipelineStage):
     def process(self, context: dict[str, Any], engine: SelfHealEngine) -> dict[str, Any]:
         patches: list[PatchEvent] = context.get("patches", [])
 
-        best_validation: Optional[ValidationEvent] = None
+        best_validation: ValidationEvent | None = None
 
         for patch in patches:
-            validation = engine.validator.validate(patch)
+            validation = engine.validator.validate(patch)  # type: ignore[attr-defined]
             engine.metrics.record_validation(validation.result, validation.duration)
             logger.info(
                 f"Validation: {validation.result} in {validation.duration:.2f}s"
@@ -87,7 +87,7 @@ class ValidateStage(PipelineStage):
         return context
 
     @staticmethod
-    def _record_experience(context: dict, validation: ValidationEvent) -> None:
+    def _record_experience(context: dict[str, Any], validation: ValidationEvent) -> None:
         """Record a successfully validated patch in the experience store."""
         try:
             from selfheal.core.experience import get_experience

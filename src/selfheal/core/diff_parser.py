@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 # Number of initial lines to inspect for unified-diff format detection
 DIFF_DETECT_LINES = 20
@@ -26,7 +25,7 @@ def is_unified_diff(content: str) -> bool:
 
 def parse_and_apply_diff(
     original_lines: list[str], diff_content: str
-) -> Optional[list[str]]:
+) -> list[str] | None:
     """Parse a unified diff and apply to original lines.
 
     Returns the patched lines on success, or None if the diff content

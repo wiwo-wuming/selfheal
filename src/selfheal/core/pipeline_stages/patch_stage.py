@@ -71,9 +71,9 @@ class PatchStage(PipelineStage):
             # Generate patch (use LLM fallback on retry if available)
             if attempt > 0 and engine._llm_patcher is not None:
                 logger.info("Strategy fallback: switching to LLM patcher for retry")
-                patch = engine._llm_patcher.generate(classification)
+                patch = engine._llm_patcher.generate(classification)  # type: ignore[attr-defined]
             else:
-                patch = engine.patcher.generate(classification)
+                patch = engine.patcher.generate(classification)  # type: ignore[attr-defined]
 
             # Resolve target file
             if not patch.target_file:

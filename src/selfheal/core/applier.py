@@ -7,7 +7,7 @@ import shutil
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, cast
 
 from selfheal.config import EngineConfig
 from selfheal.core.diff_parser import is_unified_diff, parse_and_apply_diff
@@ -47,6 +47,7 @@ class PatchApplier:
             logger.error("Patch has no target_file, cannot apply")
             return False
 
+        assert target is not None
         target_path = Path(target)
         if not target_path.exists():
             logger.error(f"Target file not found: {target_path}")
@@ -83,8 +84,9 @@ class PatchApplier:
         except Exception as e:
             logger.error(f"Error applying patch {patch.patch_id}: {e}")
             # Attempt rollback
-            if backup_path := patch.backup_path:
-                self._rollback(target_path, Path(backup_path))
+            backup_path_val: str = cast(str, patch.backup_path)
+            if backup_path_val:
+                self._rollback(target_path, Path(backup_path_val))
             patch.status = "rejected"
             return False
 
@@ -217,7 +219,7 @@ class PatchApplier:
         code_blocks = re.findall(r"```(?:python|py|diff)?\n(.*?)```", content, re.DOTALL)
         if code_blocks:
             # Return the largest block
-            return max(code_blocks, key=len).strip() + "\n"
+            return max(code_blocks, key=len).strip() + "\n"  # type: ignore[no-any-return]
 
         # Remove common comment markers from non-code lines
         lines = content.split("\n")
@@ -230,7 +232,7 @@ class PatchApplier:
 
         return "\n".join(code_lines)
 
-    def get_backup_path(self, patch_id: str) -> Optional[str]:
+    def get_backup_path(self, patch_id: str) -> str | None:
         """Get the backup path for a patch."""
         return self._applied_patches.get(patch_id)
 
@@ -258,16 +260,16 @@ class PatchApplier:
     def _preview_diff(self, target_path: Path, diff_content: str) -> str:
         """Preview a unified diff: count additions and deletions."""
         lines = diff_content.splitlines()
-        added = sum(1 for l in lines if l.startswith("+") and not l.startswith("+++"))
-        removed = sum(1 for l in lines if l.startswith("-") and not l.startswith("---"))
-        hunks = sum(1 for l in lines if l.startswith("@@"))
+        added = sum(1 for line in lines if line.startswith("+") and not line.startswith("+++"))
+        removed = sum(1 for line in lines if line.startswith("-") and not line.startswith("---"))
+        hunks = sum(1 for line in lines if line.startswith("@@"))
 
         summary = [
             f"[dry-run] Patch preview for: {target_path}",
             f"  +{added} lines added, -{removed} lines removed, {hunks} hunk(s)",
         ]
         # Show first 8 changed lines as preview
-        changed = [l for l in lines if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))][:8]
+        changed = [line for line in lines if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))][:8]
         for line in changed:
             summary.append(f"  {line}")
         if len(changed) < added + removed:
@@ -311,7 +313,7 @@ class PatchApplier:
         except OSError as e:
             logger.warning("Failed to save backup index: %s", e)
 
-    def list_backups(self) -> dict[str, dict]:
+    def list_backups(self) -> dict[str, dict[str, Any]]:
         """List all tracked backups with metadata.
 
         Returns a dict mapping patch_id to {backup_path, target_file, exists}.
@@ -341,7 +343,7 @@ class PatchApplier:
 
     # --- Backup lifecycle management ---
 
-    def cleanup_backups(self, max_age_days: int = 30) -> dict:
+    def cleanup_backups(self, max_age_days: int = 30) -> dict[str, Any]:
         """Remove backup files older than max_age_days and orphan files.
 
         Returns a dict with cleanup statistics.

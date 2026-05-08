@@ -3,11 +3,12 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
 import click
+
+from selfheal.cli.utils import reconstruct_classification_event
 from selfheal.config import Config
 from selfheal.events import PatchEvent, ValidationEvent
-from selfheal.cli.utils import reconstruct_classification_event
 from selfheal.registry import get_registry
 
 
@@ -16,7 +17,7 @@ from selfheal.registry import get_registry
 @click.option("--type", "reporter_type", default="terminal", help="Reporter type")
 @click.option("--input", "input_file", type=click.Path(exists=True), required=True, help="Input validation JSON file")
 @click.pass_context
-def report(ctx: click.Context, config: Optional[str], reporter_type: str, input_file: str) -> None:
+def report(ctx: click.Context, config: str | None, reporter_type: str, input_file: str) -> None:
     """Generate a report from a validation event."""
     if config:
         cfg = Config.from_file(Path(config))

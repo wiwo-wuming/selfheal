@@ -8,13 +8,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from selfheal.events import ErrorSeverity
+    pass
 
 
 class MetricsCollector:
     """Collects and reports pipeline metrics."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.reset()
 
     def reset(self) -> None:

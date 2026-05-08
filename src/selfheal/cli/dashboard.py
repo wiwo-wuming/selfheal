@@ -1,6 +1,6 @@
 """dashboard — generate HTML dashboard or start interactive server."""
 from pathlib import Path
-from typing import Optional
+
 import click
 
 
@@ -12,7 +12,7 @@ import click
 @click.option("--open", "open_browser", is_flag=True, help="Open browser automatically")
 @click.option("--production", is_flag=True, help="Use gunicorn (production mode)")
 @click.pass_context
-def dashboard(ctx: click.Context, config: Optional[str], output: Optional[str], serve: bool, port: int, open_browser: bool, production: bool) -> None:
+def dashboard(ctx: click.Context, config: str | None, output: str | None, serve: bool, port: int, open_browser: bool, production: bool) -> None:
     """Generate an HTML dashboard or start an interactive dashboard server."""
     if config:
         from selfheal.config import Config as CfgCls

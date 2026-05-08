@@ -9,7 +9,7 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ class PluginSandbox:
         self,
         plugin_path: Path,
         func_name: str = "run",
-        args: Optional[dict[str, Any]] = None,
-        expected_checksum: Optional[str] = None,
+        args: dict[str, Any] | None = None,
+        expected_checksum: str | None = None,
     ) -> dict[str, Any]:
         """Execute a function from a plugin file in a subprocess.
 
@@ -85,7 +85,7 @@ class PluginSandbox:
         # Parse JSON result from stdout
         stdout = proc.stdout.strip() if proc.stdout else ""
         try:
-            return json.loads(stdout)
+            return json.loads(stdout)  # type: ignore[no-any-return]
         except json.JSONDecodeError:
             stderr_snippet = (proc.stderr or "")[:200]
             return {

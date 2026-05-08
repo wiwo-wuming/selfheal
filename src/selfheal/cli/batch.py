@@ -1,8 +1,9 @@
 """batch — process multiple test failures at once."""
 import json
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.engine import SelfHealEngine
 from selfheal.events import TestFailureEvent
@@ -14,7 +15,7 @@ from selfheal.events import TestFailureEvent
 @click.option("--auto-apply", is_flag=True, help="Automatically apply generated patches")
 @click.option("--dry-run", is_flag=True, help="Preview patches without modifying any files")
 @click.pass_context
-def batch(ctx: click.Context, config: Optional[str], input_file: str, auto_apply: bool, dry_run: bool) -> None:
+def batch(ctx: click.Context, config: str | None, input_file: str, auto_apply: bool, dry_run: bool) -> None:
     """Process multiple test failures in batch."""
     if config:
         cfg = Config.from_file(Path(config))

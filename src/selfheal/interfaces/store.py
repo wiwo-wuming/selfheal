@@ -3,13 +3,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from selfheal.events import (
-    TestFailureEvent,
-    ClassificationEvent,
-    PatchEvent,
-    ValidationEvent,
-)
-
 
 class StoreInterface(ABC):
     """Interface for event stores."""

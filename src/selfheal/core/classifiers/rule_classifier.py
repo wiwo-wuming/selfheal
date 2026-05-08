@@ -2,19 +2,17 @@
 
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 from selfheal.config import ClassifierConfig, RuleConfig
 from selfheal.events import (
-    TestFailureEvent,
     ClassificationEvent,
-    ErrorSeverity,
     ErrorCategory,
+    ErrorSeverity,
+    TestFailureEvent,
 )
 from selfheal.interfaces.classifier import ClassifierInterface
-
 
 # Default classification rules (kept as dicts for readability; converted at compile time)
 DEFAULT_RULES = [
@@ -93,12 +91,12 @@ class RuleClassifier(ClassifierInterface):
         error_message = event.error_message
         traceback = event.traceback
 
-        best_match: Optional[dict[str, object]] = None
+        best_match: dict[str, object] | None = None
         best_confidence = 0.0
 
         # Check error type first (highest priority)
         for rule in self._rules:
-            if rule["pattern"].search(error_type):
+            if rule["pattern"].search(error_type):  # type: ignore[attr-defined]
                 best_match = rule
                 best_confidence = 0.9
                 break
@@ -106,7 +104,7 @@ class RuleClassifier(ClassifierInterface):
         # Check error message
         if not best_match:
             for rule in self._rules:
-                if rule["pattern"].search(error_message):
+                if rule["pattern"].search(error_message):  # type: ignore[attr-defined]
                     best_match = rule
                     best_confidence = 0.7
                     break
@@ -114,7 +112,7 @@ class RuleClassifier(ClassifierInterface):
         # Check traceback
         if not best_match:
             for rule in self._rules:
-                if rule["pattern"].search(traceback):
+                if rule["pattern"].search(traceback):  # type: ignore[attr-defined]
                     best_match = rule
                     best_confidence = 0.5
                     break
@@ -122,10 +120,10 @@ class RuleClassifier(ClassifierInterface):
         if best_match:
             return ClassificationEvent(
                 original_event=event,
-                category=best_match["category"],
-                severity=best_match["severity"],
-                confidence=best_confidence,
-                reasoning=f"Matched pattern: {best_match['pattern'].pattern}",
+                category=best_match["category"],  # type: ignore[arg-type]
+                severity=best_match["severity"],  # type: ignore[arg-type]
+                confidence=float(best_confidence),
+                reasoning=f"Matched pattern: {best_match['pattern'].pattern}",  # type: ignore[attr-defined]
             )
 
         # No match found

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from selfheal.events import TestFailureEvent, ClassificationEvent
+from selfheal.events import ClassificationEvent, TestFailureEvent
 
 
 class ClassifierInterface(ABC):

@@ -4,9 +4,9 @@ import logging
 import re
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 
 from selfheal.config import PatcherConfig
 from selfheal.events import ClassificationEvent, PatchEvent
@@ -28,7 +28,7 @@ _TRACEBACK_LOCATION_RE = re.compile(
 _ASSERT_COMPARE_RE = re.compile(r"assert\s+(.+)\s+==\s+(.+)")
 
 
-def _parse_traceback(traceback_text: str) -> dict:
+def _parse_traceback(traceback_text: str) -> dict[str, Any]:
     """Extract structured information from a Python traceback string.
 
     Returns a dict with:
@@ -40,7 +40,7 @@ def _parse_traceback(traceback_text: str) -> dict:
         - actual: actual value from assertion (str or None)
         - missing_module: module name for import errors (str or None)
     """
-    result: dict = {
+    result: dict[str, Any] = {
         "error_file": "",
         "error_line": None,
         "error_func": None,
@@ -77,7 +77,7 @@ def _parse_traceback(traceback_text: str) -> dict:
     return result
 
 
-def _parse_error_message(error_message: str, error_type: str) -> dict:
+def _parse_error_message(error_message: str, error_type: str) -> dict[str, Any]:
     """Parse the error message to extract useful details for patching.
 
     Returns a dict that may include:
@@ -85,7 +85,7 @@ def _parse_error_message(error_message: str, error_type: str) -> dict:
         - missing_module (for import errors)
         - error_detail (a cleaned-up version of the message)
     """
-    detail: dict = {
+    detail: dict[str, Any] = {
         "expected": None,
         "actual": None,
         "missing_module": None,
@@ -136,7 +136,7 @@ class TemplatePatcher(PatcherInterface):
 
     def __init__(self, config: PatcherConfig):
         self.config = config
-        self._env: Optional[Environment] = None
+        self._env: Environment | None = None
         self._templates_dir = self._resolve_templates_dir(config.templates_dir)
 
     name = "template"
@@ -207,7 +207,7 @@ class TemplatePatcher(PatcherInterface):
             pass
         return ""
 
-    def _build_template_context(self, classification: ClassificationEvent) -> dict:
+    def _build_template_context(self, classification: ClassificationEvent) -> dict[str, Any]:
         """Build the full context dict passed to Jinja2 templates."""
         event = classification.original_event
         tb_info = _parse_traceback(event.traceback)
@@ -267,7 +267,6 @@ class TemplatePatcher(PatcherInterface):
             return strategy.generate(classification, self)
 
         # --- fallback: generic template or hardcoded patch ---
-        category = classification.category
         templates_dir = self._templates_dir
         template_path = templates_dir / "_generic.py.j2"
 
@@ -298,7 +297,7 @@ class TemplatePatcher(PatcherInterface):
         )
 
     @staticmethod
-    def _try_experience_patch(classification: ClassificationEvent) -> Optional[PatchEvent]:
+    def _try_experience_patch(classification: ClassificationEvent) -> PatchEvent | None:
         """Search the experience store for a previously successful patch."""
         try:
             from selfheal.core.experience import get_experience
@@ -326,7 +325,7 @@ class TemplatePatcher(PatcherInterface):
         return None
 
     @staticmethod
-    def _try_experience_fallback(classification: ClassificationEvent) -> Optional[tuple[str, Optional[str]]]:
+    def _try_experience_fallback(classification: ClassificationEvent) -> tuple[str, str | None] | None:
         """Search experience store without category restriction for fallback.
 
         When no template exists for a category, this broader search may find
@@ -360,9 +359,9 @@ class TemplatePatcher(PatcherInterface):
         target_file: str,
         error_line: int,
         original_code: str,
-        typo_suggestion: Optional[str],
+        typo_suggestion: str | None,
         missing_module: str,
-        source_module: Optional[str],
+        source_module: str | None,
     ) -> str:
         """Build a context-aware import patch.
 
@@ -410,7 +409,7 @@ class TemplatePatcher(PatcherInterface):
             f"+import {missing_module}  # SelfHeal: added missing import\n"
         )
 
-    def _generate_fallback_patch(self, classification: ClassificationEvent) -> tuple[str, Optional[str]]:
+    def _generate_fallback_patch(self, classification: ClassificationEvent) -> tuple[str, str | None]:
         """Generate an executable fallback patch when no template is found.
 
         Returns a tuple of (patch_content, target_file).

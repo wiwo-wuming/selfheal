@@ -1,6 +1,8 @@
 """init — create a new SelfHeal configuration file."""
 from pathlib import Path
+
 import click
+
 from selfheal.config import Config
 
 

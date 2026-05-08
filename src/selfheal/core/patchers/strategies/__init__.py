@@ -4,8 +4,6 @@ Registers PatchStrategy subclasses and dispatches patch generation
 by error category.
 """
 
-from typing import Optional
-
 from .base import PatchStrategy
 
 _strategies: dict[str, PatchStrategy] = {}
@@ -16,7 +14,7 @@ def register_strategy(strategy: PatchStrategy) -> None:
     _strategies[strategy.category.value] = strategy
 
 
-def get_strategy(category: str) -> Optional[PatchStrategy]:
+def get_strategy(category: str) -> PatchStrategy | None:
     """Return the registered strategy for *category*, or None."""
     return _strategies.get(category)
 
@@ -24,12 +22,12 @@ def get_strategy(category: str) -> Optional[PatchStrategy]:
 # ---------------------------------------------------------------------------
 # Import and register all strategies
 # ---------------------------------------------------------------------------
+from selfheal.events import ErrorCategory
+
 from .assertion import AssertionStrategy
+from .fallback import FallbackStrategy
 from .import_strategy import ImportStrategy
 from .runtime import RuntimeStrategy
-from .fallback import FallbackStrategy
-
-from selfheal.events import ErrorCategory
 
 # Single-category strategies
 register_strategy(AssertionStrategy())
@@ -59,6 +57,6 @@ _fallback_categories = (
     ErrorCategory.UNKNOWN,
 )
 for cat in _fallback_categories:
-    s = FallbackStrategy()
-    s.category = cat
-    register_strategy(s)
+    fs = FallbackStrategy()
+    fs.category = cat
+    register_strategy(fs)

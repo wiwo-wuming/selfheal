@@ -1,6 +1,7 @@
 """Shared CLI utilities."""
 from typing import Any
-from selfheal.events import TestFailureEvent, ClassificationEvent, ErrorSeverity
+
+from selfheal.events import ClassificationEvent, ErrorSeverity, PatchEvent, TestFailureEvent
 
 
 def reconstruct_failure_event(data: dict[str, Any]) -> TestFailureEvent:
@@ -25,9 +26,8 @@ def reconstruct_classification_event(data: dict[str, Any]) -> ClassificationEven
     )
 
 
-def make_rollback_patch(patch_id: str, info: dict):
+def make_rollback_patch(patch_id: str, info: dict[str, Any]) -> PatchEvent:
     """Create a minimal PatchEvent for rollback operations."""
-    from selfheal.events import PatchEvent
     dummy_event = TestFailureEvent(
         test_path=info["target_file"],
         error_type="rolled_back",

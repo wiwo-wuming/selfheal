@@ -29,7 +29,7 @@ class ReportStage(PipelineStage):
             logger.warning("No final_validation in context, skipping report")
             return context
 
-        reporters = getattr(engine, "_reporters", None) or [engine.reporter]
+        reporters = getattr(engine, "_reporters", None) or [engine.reporter]  # type: ignore[attr-defined]
 
         for reporter in reporters:
             try:

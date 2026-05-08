@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any
 
 
 class ErrorSeverity(Enum):
@@ -43,9 +43,9 @@ class TestFailureEvent:
     error_message: str
     traceback: str = ""
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "test_path": self.test_path,
             "error_type": self.error_type,
@@ -66,7 +66,7 @@ class ClassificationEvent:
     reasoning: str = ""
     alternative_categories: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "original_event": self.original_event.to_dict(),
             "category": self.category,
@@ -84,13 +84,13 @@ class PatchEvent:
     patch_id: str
     patch_content: str
     generator: str  # "template" or "llm"
-    target_file: Optional[str] = None  # file path to apply patch to
-    backup_path: Optional[str] = None  # backup of original file
+    target_file: str | None = None  # file path to apply patch to
+    backup_path: str | None = None  # backup of original file
     status: str = "generated"  # generated, pending_review, applied, rejected, rolled_back
-    applied_at: Optional[datetime] = None
+    applied_at: datetime | None = None
     suggested_command: str = ""  # CLI command hint for manual review mode
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "classification_event": self.classification_event.to_dict(),
             "patch_id": self.patch_id,
@@ -113,7 +113,7 @@ class ValidationEvent:
     error_message: str = ""
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "patch_event": self.patch_event.to_dict(),
             "result": self.result,

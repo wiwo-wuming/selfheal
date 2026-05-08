@@ -1,6 +1,7 @@
 """Patch strategy for RUNTIME, TYPE, VALUE, and SYNTAX errors."""
 
 from selfheal.events import ErrorCategory
+
 from .base import TemplateRenderStrategy
 
 

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +506,7 @@ refreshAll();
 </html>"""
 
 
-def generate_html(output_path: Optional[str] = None) -> str:
+def generate_html(output_path: str | None = None) -> str:
     if output_path:
         Path(output_path).write_text(_TEMPLATE, encoding="utf-8")
         logger.info("Dashboard written to %s", output_path)

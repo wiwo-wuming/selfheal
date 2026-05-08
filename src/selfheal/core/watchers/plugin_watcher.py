@@ -4,8 +4,9 @@ import hashlib
 import logging
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from selfheal.config import WatcherConfig
 from selfheal.interfaces.watcher import WatcherInterface
@@ -33,7 +34,7 @@ class PluginWatcher(WatcherInterface):
         self.config = config
         self.plugin_dir = Path(config.path).resolve()
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._loader = PluginLoader()
         # Debounce: track pending reloads to avoid multiple reloads
         # for rapid successive change events (editor save, etc.)
@@ -89,8 +90,8 @@ class PluginWatcher(WatcherInterface):
     def _try_watchdog_loop(self, callback: Callable[[Any], None]) -> bool:
         """Attempt to use watchdog for file monitoring. Returns True on success."""
         try:
-            from watchdog.events import FileSystemEventHandler
-            from watchdog.observers import Observer
+            from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
+            from watchdog.observers import Observer  # type: ignore[import-not-found]
         except ImportError:
             logger.info(
                 "watchdog not installed — falling back to polling. "
@@ -100,14 +101,14 @@ class PluginWatcher(WatcherInterface):
 
         watcher_self = self
 
-        class _PluginFileHandler(FileSystemEventHandler):
+        class _PluginFileHandler(FileSystemEventHandler):  # type: ignore[misc]
             """Watchdog event handler that schedules plugin reloads."""
 
-            def on_modified(self, event):
+            def on_modified(self, event: Any) -> None:
                 if not event.is_directory:
                     watcher_self.schedule_reload(event.src_path)
 
-            def on_created(self, event):
+            def on_created(self, event: Any) -> None:
                 if not event.is_directory:
                     watcher_self.schedule_reload(event.src_path)
 

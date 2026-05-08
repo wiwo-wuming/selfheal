@@ -8,7 +8,7 @@ import time
 import urllib.request
 import uuid as _uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 from selfheal.config import ReporterConfig
 from selfheal.events import ValidationEvent
@@ -29,11 +29,11 @@ class WebhookReporter(ReporterInterface):
     def __init__(self, config: ReporterConfig):
         self.config = config
         self.webhook_url = config.webhook_url
-        self.webhook_secret: Optional[str] = self._resolve_secret(config)
-        self.enabled_events = set(config.webhook_events)
+        self.webhook_secret: str | None = self._resolve_secret(config)
+        self.enabled_events: list[str] = list(config.webhook_events)
 
     @staticmethod
-    def _resolve_secret(config: ReporterConfig) -> Optional[str]:
+    def _resolve_secret(config: ReporterConfig) -> Any:
         """Resolve webhook secret from config, supporting ${ENV} placeholders."""
         from selfheal.config import _resolve_env
 
@@ -52,7 +52,7 @@ class WebhookReporter(ReporterInterface):
         if not self.webhook_secret:
             return ""
 
-        message = f"{timestamp}.{nonce}.".encode("utf-8") + payload_bytes
+        message = f"{timestamp}.{nonce}.".encode() + payload_bytes
         mac = hmac.new(
             self.webhook_secret.encode("utf-8"),
             message,
@@ -97,7 +97,7 @@ class WebhookReporter(ReporterInterface):
         }
 
         if event.error_message:
-            payload["attachments"][0]["fields"].append(
+            payload["attachments"][0]["fields"].append(  # type: ignore[index]
                 {"title": "Error", "value": event.error_message[:500], "short": False}
             )
 
@@ -153,7 +153,7 @@ class WebhookReporter(ReporterInterface):
         timestamp_header: str,
         nonce_header: str,
         max_age_seconds: int = 300,
-        seen_nonces: Optional[set] = None,
+        seen_nonces: set[str] | None = None,
     ) -> bool:
         """Verify webhook request integrity (anti-replay + anti-tamper).
 
@@ -177,7 +177,7 @@ class WebhookReporter(ReporterInterface):
         if not signature_header.startswith("sha256="):
             return False
         expected = signature_header[len("sha256="):]
-        message = f"{timestamp_header}.{nonce_header}.".encode("utf-8") + body
+        message = f"{timestamp_header}.{nonce_header}.".encode() + body
         computed = hmac.new(
             secret.encode("utf-8"), message, hashlib.sha256
         ).hexdigest()

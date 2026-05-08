@@ -1,8 +1,9 @@
 """metrics — show self-healing metrics and statistics."""
 import json
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.core.metrics import MetricsCollector
 from selfheal.registry import get_registry
@@ -12,7 +13,7 @@ from selfheal.registry import get_registry
 @click.option("--config", type=click.Path(exists=True), help="Path to config file")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def metrics(ctx: click.Context, config: Optional[str], as_json: bool) -> None:
+def metrics(ctx: click.Context, config: str | None, as_json: bool) -> None:
     """Show self-healing metrics and statistics."""
     if config:
         cfg = Config.from_file(Path(config))

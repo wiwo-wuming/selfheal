@@ -2,11 +2,12 @@
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.core.applier import PatchApplier
-from selfheal.events import PatchEvent, ClassificationEvent, ErrorSeverity, TestFailureEvent
+from selfheal.events import ClassificationEvent, ErrorSeverity, PatchEvent, TestFailureEvent
 
 
 @click.command()
@@ -16,7 +17,7 @@ from selfheal.events import PatchEvent, ClassificationEvent, ErrorSeverity, Test
 @click.option("--auto-apply", is_flag=True, help="Automatically apply the patch to the source file")
 @click.option("--dry-run", is_flag=True, help="Preview patch without modifying files")
 @click.pass_context
-def apply(ctx: click.Context, config: Optional[str], input_file: str, target: Optional[str], auto_apply: bool, dry_run: bool) -> None:
+def apply(ctx: click.Context, config: str | None, input_file: str, target: str | None, auto_apply: bool, dry_run: bool) -> None:
     """Apply a generated patch to a source file.
 
     Reads a patch event JSON file and applies the patch to the target

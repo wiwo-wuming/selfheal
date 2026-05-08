@@ -22,13 +22,13 @@ def _get_interface_map() -> dict[str, type]:
         return _INTERFACE_MAP
 
     from selfheal.interfaces import (
-        WatcherInterface,
         ClassifierInterface,
         PatcherInterface,
-        ValidatorInterface,
+        PipelineStage,
         ReporterInterface,
         StoreInterface,
-        PipelineStage,
+        ValidatorInterface,
+        WatcherInterface,
     )
 
     _INTERFACE_MAP.update({
@@ -50,7 +50,7 @@ class PluginLoader:
     :meth:`reload_module` without restarting the process.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.registry = get_registry()
         self._loaded_plugins: list[type] = []
         # Track module import paths → module objects for hot-reloading
@@ -151,7 +151,12 @@ class PluginLoader:
                 try:
                     reloaded = importlib.util.module_from_spec(spec)
                     sys.modules[module_name] = reloaded
-                    spec.loader.exec_module(reloaded)
+                    if spec.loader is not None:
+                        spec.loader.exec_module(reloaded)
+                    else:
+                        raise ImportError(
+                            f"Module spec has no loader: {module_name}"
+                        )
 
                     self._register_plugin_module(
                         reloaded, module_path=module_name

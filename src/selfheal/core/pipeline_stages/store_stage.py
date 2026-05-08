@@ -31,6 +31,6 @@ class StoreStage(PipelineStage):
         if final is not None:
             events.append(final)
 
-        engine.store.save_events(events)
+        engine.store.save_events(events)  # type: ignore[attr-defined]
         logger.debug(f"Stored {len(events)} events")
         return context

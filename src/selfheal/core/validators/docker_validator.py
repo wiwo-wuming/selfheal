@@ -13,9 +13,9 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
-from selfheal.config import ValidatorConfig, DockerConfig
+from selfheal.config import DockerConfig, ValidatorConfig
 from selfheal.events import PatchEvent, ValidationEvent
 from selfheal.interfaces.validator import ValidatorInterface
 
@@ -42,8 +42,8 @@ class DockerValidator(ValidatorInterface):
         self.config = config
         self.docker_config = config.docker or DockerConfig()
         self.timeout = config.timeout
-        self._client = None
-        self._docker_available: Optional[bool] = None  # cached check
+        self._client: Any = None
+        self._docker_available: bool | None = None  # cached check
 
     name = "docker"
 
@@ -93,7 +93,7 @@ class DockerValidator(ValidatorInterface):
         self._docker_available = True
         return True
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Get or create Docker client."""
         if self._client is None:
             try:
@@ -297,8 +297,8 @@ class DockerValidator(ValidatorInterface):
             "*.pyc", ".DS_Store", ".mypy_cache", ".ruff_cache",
         }
 
-        def _ignore(src_dir, names):
-            ignored = set()
+        def _ignore(src_dir: str, names: list[str]) -> set[str]:
+            ignored: set[str] = set()
             for name in names:
                 if name in skip_patterns:
                     ignored.add(name)

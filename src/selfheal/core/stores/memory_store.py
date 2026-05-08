@@ -1,12 +1,12 @@
 """Memory store implementation."""
 
-from typing import Any, Optional
+from typing import Any
 
 from selfheal.config import StoreConfig
 from selfheal.events import (
-    TestFailureEvent,
     ClassificationEvent,
     PatchEvent,
+    TestFailureEvent,
     ValidationEvent,
 )
 from selfheal.interfaces.store import StoreInterface

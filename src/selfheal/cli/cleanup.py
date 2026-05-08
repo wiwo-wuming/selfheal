@@ -1,7 +1,8 @@
 """cleanup — remove old backup files and orphan backups."""
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.core.applier import PatchApplier
 
@@ -11,7 +12,7 @@ from selfheal.core.applier import PatchApplier
 @click.option("--max-age", default=30, help="Remove backups older than N days (default: 30)")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @click.pass_context
-def cleanup(ctx: click.Context, config: Optional[str], max_age: int, force: bool) -> None:
+def cleanup(ctx: click.Context, config: str | None, max_age: int, force: bool) -> None:
     """Remove old backup files and orphan backups."""
     if config:
         cfg = Config.from_file(Path(config))

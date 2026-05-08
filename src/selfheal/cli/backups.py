@@ -1,7 +1,8 @@
 """backups — list all tracked backup files."""
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.core.applier import PatchApplier
 
@@ -9,7 +10,7 @@ from selfheal.core.applier import PatchApplier
 @click.command()
 @click.option("--config", type=click.Path(exists=True), help="Path to config file")
 @click.pass_context
-def backups(ctx: click.Context, config: Optional[str]) -> None:
+def backups(ctx: click.Context, config: str | None) -> None:
     """List all tracked backup files."""
     if config:
         cfg = Config.from_file(Path(config))

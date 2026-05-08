@@ -78,6 +78,11 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/selfheal/cli/__init__.py" = ["E402"]
+"src/selfheal/core/classifiers/rule_classifier.py" = ["E402"]
+"src/selfheal/core/patchers/strategies/__init__.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.10"
 strict = true

@@ -1,17 +1,17 @@
 """LLM-based classifier implementation."""
 
 import logging
-from typing import Optional
+from typing import Any
 
 from selfheal.config import ClassifierConfig, LLMConfig
-from selfheal.events import TestFailureEvent, ClassificationEvent, ErrorSeverity
-from selfheal.interfaces.classifier import ClassifierInterface
 from selfheal.core.llm_client import (
-    call_structured,
     CLASSIFY_TOOL,
-    LLMResponse,
     LLMError,
+    LLMResponse,
+    call_structured,
 )
+from selfheal.events import ClassificationEvent, ErrorSeverity, TestFailureEvent
+from selfheal.interfaces.classifier import ClassifierInterface
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class LLMClassifier(ClassifierInterface):
 
     def __init__(self, config: ClassifierConfig):
         self.config = config
-        self.llm_config: Optional[LLMConfig] = None
+        self.llm_config: LLMConfig | None = None
         if config.llm:
             self.llm_config = config.llm
         # Cache integration
@@ -85,7 +85,7 @@ class LLMClassifier(ClassifierInterface):
                 reasoning=f"LLM error: {str(e)}",
             )
 
-    def _build_system(self) -> list[dict]:
+    def _build_system(self) -> list[dict[str, Any]]:
         """Build system prompt with classification instructions and cache control."""
         categories = ", ".join([
             "assertion", "import", "timeout", "network", "syntax",
@@ -101,12 +101,12 @@ class LLMClassifier(ClassifierInterface):
             f"Severities: {severities}"
         )
 
-        blocks: list[dict] = [{"type": "text", "text": system_text}]
+        blocks: list[dict[str, Any]] = [{"type": "text", "text": system_text}]
         if getattr(self.llm_config, "enable_prompt_caching", False):
             blocks[0]["cache_control"] = {"type": "ephemeral"}
         return blocks
 
-    def _build_messages(self, event: TestFailureEvent) -> list[dict]:
+    def _build_messages(self, event: TestFailureEvent) -> list[dict[str, Any]]:
         """Build user messages containing only the event information."""
         user_text = (
             f"Error Type: {event.error_type}\n"

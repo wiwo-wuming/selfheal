@@ -2,11 +2,12 @@
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+
 import click
+
+from selfheal.cli.utils import reconstruct_failure_event
 from selfheal.config import Config
 from selfheal.events import ClassificationEvent, ErrorSeverity
-from selfheal.cli.utils import reconstruct_failure_event
 from selfheal.registry import get_registry
 
 
@@ -15,7 +16,7 @@ from selfheal.registry import get_registry
 @click.option("--type", "patcher_type", default="template", help="Patcher type")
 @click.option("--input", "input_file", type=click.Path(exists=True), required=True, help="Input classification JSON file")
 @click.pass_context
-def patch(ctx: click.Context, config: Optional[str], patcher_type: str, input_file: str) -> None:
+def patch(ctx: click.Context, config: str | None, patcher_type: str, input_file: str) -> None:
     """Generate a patch for a failure."""
     if config:
         cfg = Config.from_file(Path(config))

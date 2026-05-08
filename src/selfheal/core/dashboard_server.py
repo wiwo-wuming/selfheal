@@ -10,13 +10,10 @@ Provides REST API endpoints for:
 
 from __future__ import annotations
 
-import json
 import logging
-import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from flask import Flask, jsonify, request
 
@@ -44,14 +41,14 @@ def _load_experience() -> Any:
     return get_experience()
 
 
-def _get_patch_list(category: Optional[str] = None) -> list[dict[str, Any]]:
+def _get_patch_list(category: str | None = None) -> list[dict[str, Any]]:
     """Get all patches from experience store with optional category filter."""
     exp = _load_experience()
     data = exp.dashboard_data()
     patches = data.get("recent_fixes", [])
     if category:
         patches = [p for p in patches if p.get("category") == category]
-    return patches
+    return patches  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +56,7 @@ def _get_patch_list(category: Optional[str] = None) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 @app.route("/api/stats")
-def api_stats():
+def api_stats() -> Any:
     """Return dashboard statistics as JSON."""
     exp = _load_experience()
     data = exp.dashboard_data()
@@ -86,7 +83,7 @@ def api_stats():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/patches")
-def api_patches():
+def api_patches() -> Any:
     """List patches with optional filtering.
 
     Query params: category, status
@@ -141,7 +138,7 @@ def api_patches():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/patches/<int:patch_id>/apply", methods=["POST"])
-def api_apply_patch(patch_id: int):
+def api_apply_patch(patch_id: int) -> Any:
     """Apply a patch to its target file."""
     exp = _load_experience()
     conn = exp._get_conn()
@@ -189,7 +186,7 @@ def api_apply_patch(patch_id: int):
 # ---------------------------------------------------------------------------
 
 @app.route("/api/patches/<int:patch_id>/rollback", methods=["POST"])
-def api_rollback_patch(patch_id: int):
+def api_rollback_patch(patch_id: int) -> Any:
     """Rollback an applied patch."""
     cfg = Config.load_default()
     applier = PatchApplier(cfg.engine)
@@ -237,7 +234,7 @@ _last_updated = datetime.now().isoformat()
 
 
 @app.route("/api/poll")
-def api_poll():
+def api_poll() -> Any:
     """Poll endpoint for auto-refresh.
 
     Returns stats plus a timestamp. Clients compare timestamps to
@@ -253,7 +250,7 @@ def api_poll():
 # ---------------------------------------------------------------------------
 
 @app.route("/")
-def index():
+def index() -> Any:
     """Serve the interactive dashboard HTML."""
     return generate_html()
 
@@ -262,7 +259,7 @@ def index():
 # CLI entry
 # ---------------------------------------------------------------------------
 
-def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False, production: bool = False):
+def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False, production: bool = False) -> None:
     """Start the dashboard server.
 
     Args:
@@ -288,7 +285,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = F
         from gunicorn.app.base import BaseApplication
 
         class StandaloneApp(BaseApplication):
-            def __init__(self):
+            def __init__(self) -> None:
                 self.options = {
                     "bind": f"{host}:{port}",
                     "workers": 4,
@@ -297,12 +294,12 @@ def run_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = F
                 }
                 super().__init__()
 
-            def load_config(self):
+            def load_config(self) -> None:
                 for k, v in self.options.items():
                     if k in self.cfg.settings and v is not None:
                         self.cfg.set(k.lower(), v)
 
-            def load(self):
+            def load(self) -> Any:
                 return app
 
         print(f"SelfHeal Dashboard (gunicorn): http://{host}:{port}")

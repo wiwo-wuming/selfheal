@@ -2,14 +2,15 @@
 
 import logging
 import uuid
-from typing import Any, Generator, Optional
+from collections.abc import Generator
+from typing import Any
 
-from selfheal.config import PatcherConfig, LLMConfig
+from selfheal.config import LLMConfig, PatcherConfig
 from selfheal.core.llm_client import (
+    SCORE_TOOL,
     LLMClientFactory,
     LLMError,
     LLMResponse,
-    SCORE_TOOL,
     call_structured,
 )
 from selfheal.events import ClassificationEvent, PatchEvent
@@ -41,7 +42,7 @@ class LLMPatcher(PatcherInterface):
 
     def __init__(self, config: PatcherConfig):
         self.config = config
-        self.llm_config: Optional[LLMConfig] = config.llm
+        self.llm_config: LLMConfig | None = config.llm
         self.refine_rounds = min(
             max(getattr(config, "refine_rounds", _DEFAULT_REFINE_ROUNDS), 1),
             _MAX_REFINE_ROUNDS,
@@ -218,8 +219,7 @@ class LLMPatcher(PatcherInterface):
                 messages=messages,
                 max_tokens=4096,
             ) as stream:
-                for text_delta in stream.text_deltas:
-                    yield text_delta
+                yield from stream.text_deltas
 
         elif provider in ("openai", "deepseek"):
             openai_messages: list[dict[str, Any]] = []
@@ -326,6 +326,7 @@ Output ONLY the diff patch, no extra commentary."""
         7-8:  good (addresses root cause)
         9-10: excellent (elegant, minimal, correct)
         """
+        assert self.llm_config is not None
         event = classification.original_event
 
         score_prompt = f"""You are a senior code reviewer. Score the following patch on a 0-10 scale.
@@ -398,12 +399,12 @@ Category: {classification.category}
         # Try diff fence first
         diff_blocks = re.findall(r"```diff\n(.*?)```", response, re.DOTALL)
         if diff_blocks:
-            return max(diff_blocks, key=len).strip()
+            return max(diff_blocks, key=len).strip()  # type: ignore[no-any-return]
 
         # Then any code fence
         code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", response, re.DOTALL)
         if code_blocks:
-            return max(code_blocks, key=len).strip()
+            return max(code_blocks, key=len).strip()  # type: ignore[no-any-return]
 
         # Fallback: return full response stripped
         return response.strip()

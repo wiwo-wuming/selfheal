@@ -5,12 +5,11 @@ This saves API costs by only invoking the LLM when rules are uncertain.
 """
 
 import logging
-from typing import Optional
 
-from selfheal.config import ClassifierConfig, LLMConfig
-from selfheal.core.classifiers.rule_classifier import RuleClassifier
+from selfheal.config import ClassifierConfig
 from selfheal.core.classifiers.llm_classifier import LLMClassifier
-from selfheal.events import TestFailureEvent, ClassificationEvent, ErrorSeverity, ErrorCategory
+from selfheal.core.classifiers.rule_classifier import RuleClassifier
+from selfheal.events import ClassificationEvent, ErrorCategory, ErrorSeverity, TestFailureEvent
 from selfheal.interfaces.classifier import ClassifierInterface
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class HybridClassifier(ClassifierInterface):
     def __init__(self, config: ClassifierConfig):
         self.config = config
         self.rule_classifier = RuleClassifier(config)
-        self.llm_classifier: Optional[LLMClassifier] = None
+        self.llm_classifier: LLMClassifier | None = None
         if config.llm:
             self.llm_classifier = LLMClassifier(config)
 

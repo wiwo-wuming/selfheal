@@ -1,12 +1,15 @@
 """Pytest watcher implementation."""
 
+from __future__ import annotations
+
 import logging
 import re
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional, Set
+from typing import Any
 
 from selfheal.config import WatcherConfig
 from selfheal.events import TestFailureEvent
@@ -25,9 +28,9 @@ class PytestWatcher(WatcherInterface):
     def __init__(self, config: WatcherConfig):
         self.config = config
         self._running = False
-        self._process: Optional[subprocess.Popen] = None
-        self._thread: Optional[threading.Thread] = None
-        self._known_failures: Set[str] = set()  # track seen failures
+        self._process: subprocess.Popen[bytes] | None = None
+        self._thread: threading.Thread | None = None
+        self._known_failures: set[str] = set()  # track seen failures
         self._file_state: dict[Path, float] = {}  # file -> mtime
 
     name = "pytest"
@@ -119,7 +122,7 @@ class PytestWatcher(WatcherInterface):
                 time.sleep(check_step)
                 elapsed += check_step
 
-    def _update_file_snapshot(self, watch_dirs: Set[Path]) -> None:
+    def _update_file_snapshot(self, watch_dirs: set[Path]) -> None:
         """Record current mtime for all files in watch directories."""
         patterns = self.config.watch_patterns
         for wd in watch_dirs:
@@ -130,7 +133,7 @@ class PytestWatcher(WatcherInterface):
                     if f.is_file():
                         self._file_state[f] = f.stat().st_mtime
 
-    def _detect_file_changes(self, watch_dirs: Set[Path]) -> bool:
+    def _detect_file_changes(self, watch_dirs: set[Path]) -> bool:
         """Check if any watched file has been modified."""
         patterns = self.config.watch_patterns
         for wd in watch_dirs:

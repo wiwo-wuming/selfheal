@@ -1,7 +1,8 @@
 """watch — start watching for test failures."""
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.engine import SelfHealEngine
 
@@ -11,7 +12,7 @@ from selfheal.engine import SelfHealEngine
 @click.option("--watch", multiple=True, help="Paths to watch")
 @click.option("--auto-apply", is_flag=True, help="Automatically apply generated patches")
 @click.pass_context
-def watch(ctx: click.Context, config: Optional[str], watch: tuple, auto_apply: bool) -> None:
+def watch(ctx: click.Context, config: str | None, watch: tuple[str, ...], auto_apply: bool) -> None:
     """Start watching for test failures."""
     if config:
         cfg = Config.from_file(Path(config))

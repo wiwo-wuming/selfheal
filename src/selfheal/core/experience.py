@@ -10,13 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from selfheal.core.utils import make_error_signature
-from selfheal.events import TestFailureEvent, ClassificationEvent, PatchEvent, ValidationEvent
+from selfheal.events import ClassificationEvent, PatchEvent, TestFailureEvent
 
 # Truncation length for error messages stored in the experience DB
 _ERROR_MSG_MAX_LEN = 500
@@ -61,9 +60,9 @@ class ExperienceStore:
         CREATE UNIQUE INDEX idx_snapshot_date ON metrics_snapshot(snapshot_date);
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = Path(db_path or _EXPERIENCE_DB_NAME)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self) -> None:
@@ -173,7 +172,7 @@ class ExperienceStore:
     def find_similar(
         self,
         event: TestFailureEvent,
-        category: Optional[str] = None,
+        category: str | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
         """Find past successful patches for a similar error.
@@ -432,10 +431,10 @@ class ExperienceStore:
 
 
 # Module-level singleton
-_experience_instance: Optional[ExperienceStore] = None
+_experience_instance: ExperienceStore | None = None
 
 
-def get_experience(db_path: Optional[str] = None) -> ExperienceStore:
+def get_experience(db_path: str | None = None) -> ExperienceStore:
     """Get or create the module-level ExperienceStore singleton."""
     global _experience_instance
     if _experience_instance is None:

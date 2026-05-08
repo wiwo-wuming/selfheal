@@ -1,10 +1,11 @@
 """rollback — revert applied patches from backup files."""
 from pathlib import Path
-from typing import Optional
+
 import click
+
+from selfheal.cli.utils import make_rollback_patch
 from selfheal.config import Config
 from selfheal.core.applier import PatchApplier
-from selfheal.cli.utils import make_rollback_patch
 
 
 @click.command()
@@ -13,7 +14,7 @@ from selfheal.cli.utils import make_rollback_patch
 @click.option("--all", "rollback_all", is_flag=True, help="Rollback all tracked patches")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt")
 @click.pass_context
-def rollback(ctx: click.Context, config: Optional[str], patch_id: Optional[str], rollback_all: bool, force: bool) -> None:
+def rollback(ctx: click.Context, config: str | None, patch_id: str | None, rollback_all: bool, force: bool) -> None:
     """Rollback applied patches from backup files.
 
     Without --patch-id or --all, lists all tracked backups.

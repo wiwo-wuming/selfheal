@@ -2,8 +2,9 @@
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+
 import click
+
 from selfheal.config import Config
 from selfheal.events import TestFailureEvent
 from selfheal.registry import get_registry
@@ -14,7 +15,7 @@ from selfheal.registry import get_registry
 @click.option("--type", "classifier_type", default="rule", help="Classifier type")
 @click.option("--input", "input_file", type=click.Path(exists=True), required=True, help="Input failure JSON file")
 @click.pass_context
-def classify(ctx: click.Context, config: Optional[str], classifier_type: str, input_file: str) -> None:
+def classify(ctx: click.Context, config: str | None, classifier_type: str, input_file: str) -> None:
     """Classify a test failure."""
     if config:
         cfg = Config.from_file(Path(config))

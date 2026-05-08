@@ -14,7 +14,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class LLMResponse:
     """
 
     content: str = ""
-    tool_result: Optional[dict[str, Any]] = None
+    tool_result: dict[str, Any] | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -116,7 +116,7 @@ def _classify_error(exc: Exception, provider: str) -> LLMError:
 
 
 def call_with_retry(
-    fn,
+    fn: Any,
     *,
     max_retries: int = 3,
     backoff_base: float = 2.0,
@@ -126,7 +126,7 @@ def call_with_retry(
 
     Non-retryable errors (auth, client 4xx except 429) are raised immediately.
     """
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
             return fn()
@@ -170,7 +170,7 @@ class LLMClientFactory:
     _lock = threading.Lock()
 
     @classmethod
-    def _key(cls, provider: str, base_url: Optional[str]) -> str:
+    def _key(cls, provider: str, base_url: str | None) -> str:
         return f"{provider.lower()}:{base_url or ''}"
 
     @classmethod
@@ -184,6 +184,7 @@ class LLMClientFactory:
             provider = llm_config.provider.lower()
             api_key = llm_config.get_api_key()
 
+            client: Any
             if provider in ("openai", "deepseek"):
                 try:
                     from openai import OpenAI
@@ -271,9 +272,9 @@ SCORE_TOOL = {
 def call_structured(
     llm_config: Any,
     *,
-    system: Optional[list[dict]] = None,
-    messages: list[dict],
-    tool: dict,
+    system: list[dict[str, Any]] | None = None,
+    messages: list[dict[str, Any]],
+    tool: dict[str, Any],
     temperature: float = 0.1,
     max_tokens: int = 1024,
     max_retries: int = 3,
@@ -288,7 +289,7 @@ def call_structured(
     client = LLMClientFactory.get_client(llm_config)
     provider = llm_config.provider.lower()
 
-    def _invoke():
+    def _invoke() -> LLMResponse:
         if provider in ("openai", "deepseek"):
             # OpenAI function calling
             openai_messages = []
@@ -386,21 +387,21 @@ def call_structured(
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
-    return call_with_retry(
+    return call_with_retry(  # type: ignore[no-any-return]
         _invoke,
         max_retries=max_retries,
         provider=provider,
     )
 
 
-def _extract_json(text: str) -> Optional[dict[str, Any]]:
+def _extract_json(text: str) -> dict[str, Any] | None:
     """Best-effort JSON extraction from raw text (fallback for non-tool-use)."""
     import json
     import re
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            return json.loads(match.group())  # type: ignore[no-any-return]
         except json.JSONDecodeError:
             pass
     return None

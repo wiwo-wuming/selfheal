@@ -4,7 +4,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -22,7 +21,7 @@ def _resolve_env(value: str) -> str:
     """Resolve ${ENV_VAR} and ${ENV_VAR:-default} references in config values."""
     # Match ${VAR} or ${VAR:-default}
     pattern = re.compile(r"\$\{([^}:-]+)(?::-([^}]*))?\}")
-    def _replacer(m: re.Match) -> str:
+    def _replacer(m: re.Match[str]) -> str:
         name = m.group(1)
         default = m.group(2) if m.group(2) is not None else ""
         return os.environ.get(name, default).strip()
@@ -83,12 +82,12 @@ class LLMConfig(BaseModel):
 
     provider: str = "openai"
     model: str = "gpt-4"
-    api_key: Optional[str] = None  # generic fallback (backward-compat)
-    base_url: Optional[str] = None
+    api_key: str | None = None  # generic fallback (backward-compat)
+    base_url: str | None = None
     # Provider-specific API keys (preferred over generic api_key)
-    openai_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
-    deepseek_api_key: Optional[str] = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    deepseek_api_key: str | None = None
     temperature: float = 0.1
     max_retries: int = 3
     retry_backoff: float = 2.0
@@ -103,7 +102,7 @@ class LLMConfig(BaseModel):
         mode="before",
     )
     @classmethod
-    def resolve_env_vars(cls, v: Optional[str]) -> Optional[str]:
+    def resolve_env_vars(cls, v: str | None) -> str | None:
         """Resolve environment variable placeholders like ${OPENAI_API_KEY}."""
         if v and isinstance(v, str) and "${" in v:
             return _resolve_env(v).strip()
@@ -119,7 +118,7 @@ class LLMConfig(BaseModel):
             f"base_url={self.base_url!r}, temperature={self.temperature})"
         )
 
-    def get_api_key(self) -> Optional[str]:
+    def get_api_key(self) -> str | None:
         """Return the effective API key for the configured provider.
 
         Priority: provider-specific key > generic api_key fallback.
@@ -139,7 +138,7 @@ class DockerConfig(BaseModel):
     """Docker configuration."""
     image: str = "python:3.11-slim"
     timeout: int = 600
-    network: Optional[str] = None
+    network: str | None = None
     sandbox: bool = True  # if True, validate in temp copy (safe); if False, mount host dir RW (fast)
 
 
@@ -147,7 +146,7 @@ class GitHubConfig(BaseModel):
     """GitHub integration configuration."""
     owner: str = ""
     repo: str = ""
-    token: Optional[str] = None
+    token: str | None = None
     labels: list[str] = Field(default_factory=lambda: ["self-heal", "automated"])
 
 
@@ -207,7 +206,7 @@ class ClassifierConfig(BaseModel):
     """Classifier configuration."""
     type: str = "rule"
     rules: list[RuleConfig] = Field(default_factory=list)
-    llm: Optional[LLMConfig] = None
+    llm: LLMConfig | None = None
     # Hybrid classifier settings
     confidence_threshold: float = 0.5  # min rule confidence before falling back to LLM
     cache_enabled: bool = True  # enable LLM response cache
@@ -218,7 +217,7 @@ class PatcherConfig(BaseModel):
     """Patcher configuration."""
     type: str = "template"
     templates_dir: str = "patches/"
-    llm: Optional[LLMConfig] = None
+    llm: LLMConfig | None = None
     refine_rounds: int = 2  # LLM multi-round self-refinement (1 = single pass)
     quality_threshold: float = 4.0  # reject LLM patches scored below this (0-10)
 
@@ -227,17 +226,17 @@ class ValidatorConfig(BaseModel):
     """Validator configuration."""
     type: str = "local"
     timeout: int = 300
-    venv_path: Optional[str] = None
-    docker: Optional[DockerConfig] = None
+    venv_path: str | None = None
+    docker: DockerConfig | None = None
 
 
 class ReporterItemConfig(BaseModel):
     """Configuration for a single reporter in a chain."""
     type: str = "terminal"
     enabled: bool = True
-    github: Optional[GitHubConfig] = None
-    webhook_url: Optional[str] = None
-    webhook_secret: Optional[str] = None  # HMAC-SHA256 shared secret for signing
+    github: GitHubConfig | None = None
+    webhook_url: str | None = None
+    webhook_secret: str | None = None  # HMAC-SHA256 shared secret for signing
     webhook_events: list[str] = Field(default_factory=lambda: ["passed", "failed", "error"])
 
 
@@ -256,9 +255,9 @@ class ReporterConfig(BaseModel):
               webhook_url: https://hooks.example.com/...
     """
     type: str = "terminal"  # used only in single-reporter mode
-    github: Optional[GitHubConfig] = None
-    webhook_url: Optional[str] = None
-    webhook_secret: Optional[str] = None  # HMAC-SHA256 shared secret for signing
+    github: GitHubConfig | None = None
+    webhook_url: str | None = None
+    webhook_secret: str | None = None  # HMAC-SHA256 shared secret for signing
     webhook_events: list[str] = Field(default_factory=lambda: ["passed", "failed", "error"])
     reporters: list[ReporterItemConfig] = Field(default_factory=list)
 
@@ -284,7 +283,7 @@ class PipelineStageConfig(BaseModel):
     type: str = Field(..., description="Stage name: classify, patch, validate, report, store")
     enabled: bool = True
     retry: int = 1  # max retries for this stage (used by patch stage)
-    skip_if_severity_below: Optional[str] = Field(
+    skip_if_severity_below: str | None = Field(
         default=None,
         description="Skip this stage if the classified severity is below this threshold. "
                     "One of: low, medium, high, critical. 'low' means everything runs; "
@@ -293,7 +292,7 @@ class PipelineStageConfig(BaseModel):
 
     @field_validator("skip_if_severity_below", mode="before")
     @classmethod
-    def validate_severity_threshold(cls, v: Optional[str]) -> Optional[str]:
+    def validate_severity_threshold(cls, v: str | None) -> str | None:
         if v is None:
             return None
         allowed = {"low", "medium", "high", "critical"}
@@ -351,9 +350,9 @@ class StoreConfig(BaseModel):
 
 class Config(BaseModel):
     """Main configuration."""
-    llm: Optional[LLMConfig] = None
-    docker: Optional[DockerConfig] = None
-    github: Optional[GitHubConfig] = None
+    llm: LLMConfig | None = None
+    docker: DockerConfig | None = None
+    github: GitHubConfig | None = None
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     classifier: ClassifierConfig = Field(default_factory=ClassifierConfig)
     patcher: PatcherConfig = Field(default_factory=PatcherConfig)
@@ -361,7 +360,7 @@ class Config(BaseModel):
     reporter: ReporterConfig = Field(default_factory=ReporterConfig)
     store: StoreConfig = Field(default_factory=StoreConfig)
     engine: EngineConfig = Field(default_factory=EngineConfig)
-    pipeline: Optional[PipelineConfig] = None
+    pipeline: PipelineConfig | None = None
     plugin: PluginConfig = Field(default_factory=PluginConfig)
 
     def get_effective_pipeline(self) -> PipelineConfig:

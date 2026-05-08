@@ -4,8 +4,9 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from selfheal.config import WatcherConfig
 from selfheal.events import TestFailureEvent
@@ -21,7 +22,7 @@ class RawLogWatcher(WatcherInterface):
         self.config = config
         self._running = False
         self._file_positions: dict[Path, int] = {}
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     name = "raw_log"
 
@@ -58,7 +59,7 @@ class RawLogWatcher(WatcherInterface):
                     self._file_positions[path] = 0
                 if current_size > last_pos:
                     try:
-                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(path, encoding="utf-8", errors="ignore") as f:
                             f.seek(last_pos)
                             new_content = f.read()
                             self._file_positions[path] = f.tell()

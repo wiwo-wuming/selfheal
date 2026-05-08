@@ -3,7 +3,8 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from selfheal.events import ClassificationEvent, PatchEvent, ErrorCategory
+from selfheal.events import ClassificationEvent, ErrorCategory, PatchEvent
+
 from .base import PatchStrategy
 
 if TYPE_CHECKING:
@@ -28,8 +29,8 @@ class ImportStrategy(PatchStrategy):
     ) -> PatchEvent:
         # Lazy import to avoid circular dependency
         from selfheal.core.patchers.template_patcher import (
-            _parse_traceback,
             _parse_error_message,
+            _parse_traceback,
         )
 
         event = classification.original_event

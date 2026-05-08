@@ -6,7 +6,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from selfheal.config import ValidatorConfig
 from selfheal.events import PatchEvent, ValidationEvent
@@ -116,7 +115,7 @@ class LocalValidator(ValidatorInterface):
 
         return cmd
 
-    def _get_working_dir(self) -> Optional[Path]:
+    def _get_working_dir(self) -> Path | None:
         """Get the working directory for tests."""
         if self.venv_path:
             venv_path = Path(self.venv_path)

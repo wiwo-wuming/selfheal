@@ -1,6 +1,7 @@
 """Fallback patch strategy for all remaining error categories."""
 
 from selfheal.events import ErrorCategory
+
 from .base import TemplateRenderStrategy
 
 

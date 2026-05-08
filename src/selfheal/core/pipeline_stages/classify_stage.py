@@ -20,7 +20,7 @@ class ClassifyStage(PipelineStage):
 
     def process(self, context: dict[str, Any], engine: SelfHealEngine) -> dict[str, Any]:
         event = context["event"]
-        classification = engine.classifier.classify(event)
+        classification = engine.classifier.classify(event)  # type: ignore[attr-defined]
 
         engine.metrics.record_classification(
             classification.category, classification.severity.value

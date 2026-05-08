@@ -1,9 +1,8 @@
 """Terminal reporter implementation."""
 
-from typing import Optional
 
 from selfheal.config import ReporterConfig
-from selfheal.events import ValidationEvent
+from selfheal.events import PatchEvent, ValidationEvent
 from selfheal.interfaces.reporter import ReporterInterface
 
 
@@ -63,11 +62,11 @@ class TerminalReporter(ReporterInterface):
 
         # Show review gate when patch was generated but not applied
         if patch.status in ("generated", "pending_review"):
-            print(f"\n  WARNING: PATCH NOT AUTO-APPLIED (safety gate)")
-            print(f"  Reason: auto_apply is disabled in engine config")
-            print(f"  Action: Review the patch preview below, then apply manually")
+            print("\n  WARNING: PATCH NOT AUTO-APPLIED (safety gate)")
+            print("  Reason: auto_apply is disabled in engine config")
+            print("  Action: Review the patch preview below, then apply manually")
 
-        print(f"  Preview:")
+        print("  Preview:")
         print("  " + "-" * 50)
 
         content_lines = patch.patch_content.split("\n")
@@ -80,7 +79,7 @@ class TerminalReporter(ReporterInterface):
         print("  " + "-" * 50)
 
     @staticmethod
-    def _format_patch_status(patch) -> str:
+    def _format_patch_status(patch: PatchEvent) -> str:
         """Colorize patch status for readability."""
         colors = {
             "generated": "\033[93mGENERATED (pending review)\033[0m",
@@ -100,7 +99,7 @@ class TerminalReporter(ReporterInterface):
         print(f"  Duration: {event.duration:.2f}s")
 
         if event.result == "failed":
-            print(f"\n  Error Output:")
+            print("\n  Error Output:")
             output_lines = event.error_message.split("\n")[:5]
             for line in output_lines:
                 print(f"    {line}")

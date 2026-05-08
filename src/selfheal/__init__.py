@@ -4,9 +4,9 @@ __version__ = "0.1.0"
 
 from selfheal.engine import SelfHealEngine
 from selfheal.events import (
-    TestFailureEvent,
     ClassificationEvent,
     PatchEvent,
+    TestFailureEvent,
     ValidationEvent,
 )
 

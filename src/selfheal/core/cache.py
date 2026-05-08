@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from selfheal.core.utils import make_error_signature
 from selfheal.events import TestFailureEvent
@@ -41,7 +40,7 @@ class LLMResponseCache:
         """Generate a cache key for a failure event."""
         return make_error_signature(event)
 
-    def get(self, key: str) -> Optional[dict[str, Any]]:
+    def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve a cached response if not expired."""
         entry = self._store.get(key)
         if entry is None:
@@ -54,7 +53,7 @@ class LLMResponseCache:
             return None
 
         self._hits += 1
-        return entry["data"]
+        return entry["data"]  # type: ignore[no-any-return]
 
     def set(self, key: str, data: dict[str, Any]) -> None:
         """Store a response in the cache."""
@@ -68,7 +67,7 @@ class LLMResponseCache:
             "cached_at": time.time(),
         }
 
-    def invalidate(self, key: Optional[str] = None) -> None:
+    def invalidate(self, key: str | None = None) -> None:
         """Invalidate a specific key or the entire cache."""
         if key is not None:
             self._store.pop(key, None)
@@ -109,7 +108,7 @@ class LLMResponseCache:
 
 
 # Module-level singleton for easy cross-component sharing
-_cache_instance: Optional[LLMResponseCache] = None
+_cache_instance: LLMResponseCache | None = None
 
 
 def get_cache(ttl: float = DEFAULT_CACHE_TTL) -> LLMResponseCache:

@@ -2,11 +2,12 @@
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+
 import click
+
+from selfheal.cli.utils import reconstruct_classification_event
 from selfheal.config import Config
 from selfheal.events import PatchEvent
-from selfheal.cli.utils import reconstruct_classification_event
 from selfheal.registry import get_registry
 
 
@@ -15,7 +16,7 @@ from selfheal.registry import get_registry
 @click.option("--type", "validator_type", default="local", help="Validator type")
 @click.option("--input", "input_file", type=click.Path(exists=True), required=True, help="Input patch JSON file")
 @click.pass_context
-def validate(ctx: click.Context, config: Optional[str], validator_type: str, input_file: str) -> None:
+def validate(ctx: click.Context, config: str | None, validator_type: str, input_file: str) -> None:
     """Validate a patch."""
     if config:
         cfg = Config.from_file(Path(config))

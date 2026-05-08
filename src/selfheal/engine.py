@@ -4,9 +4,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Optional
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from selfheal.config import Config, WatcherConfig
 from selfheal.core import register_defaults  # noqa: F401 - triggers auto-registration
@@ -17,10 +15,10 @@ if TYPE_CHECKING:
     from selfheal.core.watchers.plugin_watcher import PluginWatcher
 from selfheal.core.metrics import MetricsCollector
 from selfheal.events import (
-    ErrorSeverity,
-    TestFailureEvent,
     ClassificationEvent,
+    ErrorSeverity,
     PatchEvent,
+    TestFailureEvent,
     ValidationEvent,
 )
 from selfheal.interfaces.pipeline_stage import PipelineStage
@@ -65,17 +63,17 @@ class SelfHealEngine:
     # Severity ordering for skip_if_severity_below comparisons
     _SEVERITY_ORDER = {ErrorSeverity.LOW: 0, ErrorSeverity.MEDIUM: 1, ErrorSeverity.HIGH: 2, ErrorSeverity.CRITICAL: 3}
 
-    def __init__(self, config: Optional[Config] = None, hooks: Optional[list[Hook]] = None):
+    def __init__(self, config: Config | None = None, hooks: list[Hook] | None = None):
         self.config = config or Config.load_default()
         self.registry = get_registry()
         self.metrics = MetricsCollector()
         self.applier = PatchApplier(self.config.engine)
         self._pipeline: list[PipelineStage] = []
-        self._reporters: list = []  # multi-reporter chain (populated below)
-        self._watchers: list = []   # multi-watcher support (populated below)
+        self._reporters: list[Any] = []  # multi-reporter chain (populated below)
+        self._watchers: list[Any] = []   # multi-watcher support (populated below)
         self._hooks: list[Hook] = hooks or [MetricsHook()]
-        self._plugin_watcher: Optional[PluginWatcher] = None  # type: ignore[name-defined]  # set in _setup_plugin_watcher
-        self._llm_patcher: Optional[object] = None     # fallback LLM patcher
+        self._plugin_watcher: PluginWatcher | None = None  # set in _setup_plugin_watcher
+        self._llm_patcher: object | None = None     # fallback LLM patcher
         self._setup_components()
         self._setup_reporters()
         self._setup_watchers()
@@ -133,7 +131,7 @@ class SelfHealEngine:
             instance._stage_config = stage_cfg
             self._pipeline.append(instance)
 
-    def _resolve_target_file(self, test_path: str) -> Optional[str]:
+    def _resolve_target_file(self, test_path: str) -> str | None:
         """Resolve the likely source file for a given test path.
 
         E.g. tests/test_foo.py -> src/foo.py or foo.py
@@ -206,7 +204,7 @@ class SelfHealEngine:
         pipeline_start = time.time()
 
         # Run pipeline stages with hooks
-        context: dict = {"event": event}
+        context: dict[str, Any] = {"event": event}
         for stage in self._pipeline:
             stage_name = stage.name
 
@@ -281,7 +279,7 @@ class SelfHealEngine:
         return final
 
     def _maybe_rollback_on_validation_failure(
-        self, final: ValidationEvent, context: dict
+        self, final: ValidationEvent, context: dict[str, Any]
     ) -> None:
         """Rollback applied patches if validation failed and auto_apply was on.
 
@@ -477,7 +475,7 @@ class SelfHealEngine:
         """
         if self._plugin_watcher is None:
             return {"ok": [], "modified": [], "missing": []}
-        return self._plugin_watcher.check_integrity()  # type: ignore[no-any-return]
+        return self._plugin_watcher.check_integrity()
 
     def _check_integrity_before_failure(self) -> bool:
         """Run plugin integrity check before processing a failure.
@@ -545,12 +543,12 @@ class SelfHealEngine:
                 logger.exception("Error stopping watcher %s", type(w).__name__)
         self._plugin_watcher = None
         try:
-            self.store.close()
+            self.store.close()  # type: ignore[attr-defined]
         except Exception:
             logger.exception("Error closing store")
         logger.info("Engine shutdown complete")
 
-    def _should_skip_stage(self, stage: PipelineStage, context: dict) -> bool:
+    def _should_skip_stage(self, stage: PipelineStage, context: dict[str, Any]) -> bool:
         """Check whether a pipeline stage should be skipped based on severity.
 
         If the stage has a ``skip_if_severity_below`` threshold configured and

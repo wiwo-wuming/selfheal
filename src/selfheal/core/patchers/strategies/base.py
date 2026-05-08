@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from selfheal.events import ClassificationEvent, PatchEvent, ErrorCategory
+from selfheal.events import ClassificationEvent, ErrorCategory, PatchEvent
 
 if TYPE_CHECKING:
     from selfheal.core.patchers.template_patcher import TemplatePatcher

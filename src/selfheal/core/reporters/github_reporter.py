@@ -1,9 +1,9 @@
 """GitHub reporter implementation."""
 
 import logging
-from typing import Optional
+from typing import Any
 
-from selfheal.config import ReporterConfig, GitHubConfig
+from selfheal.config import GitHubConfig, ReporterConfig
 from selfheal.events import ValidationEvent
 from selfheal.interfaces.reporter import ReporterInterface
 
@@ -15,17 +15,17 @@ class GitHubReporter(ReporterInterface):
 
     def __init__(self, config: ReporterConfig):
         self.config = config
-        self.github_config: Optional[GitHubConfig] = config.github
+        self.github_config: GitHubConfig | None = config.github
 
     name = "github"
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Get or create GitHub client."""
         if not self.github_config or not self.github_config.token:
             raise ValueError("GitHub token not configured")
 
         try:
-            from github import Github
+            from github import Github  # type: ignore[import-not-found]
             return Github(self.github_config.token)
         except ImportError:
             raise ImportError("PyGithub not installed. Run: pip install selfheal[github]")

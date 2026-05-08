@@ -1,6 +1,7 @@
 """Patch strategy for ASSERTION errors."""
 
 from selfheal.events import ErrorCategory
+
 from .base import TemplateRenderStrategy
 
 
