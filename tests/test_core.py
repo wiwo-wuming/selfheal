@@ -192,3 +192,21 @@ class TestConfig:
         assert config.type == "pytest"
         assert config.path == "tests/"
         assert "-v" in config.pytest_args
+
+
+class TestDashboardGenerateHtml:
+    def test_generate_html_contains_chartjs(self):
+        from selfheal.core.dashboard import generate_html
+        html = generate_html()
+        assert "chart.js@4.4.0" in html
+        assert "new Chart(" in html
+        assert "trendChart" in html
+        assert "pieChart" in html
+
+    def test_generate_html_returns_string(self):
+        from selfheal.core.dashboard import generate_html
+        html = generate_html()
+        assert isinstance(html, str)
+        assert len(html) > 1000
+        assert "<!DOCTYPE html>" in html
+        assert "</html>" in html

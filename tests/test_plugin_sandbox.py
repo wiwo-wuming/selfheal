@@ -1,7 +1,5 @@
 """Tests for PluginSandbox — subprocess-based plugin execution isolation."""
 
-from pathlib import Path
-
 from selfheal.plugins.sandbox import PluginSandbox
 
 
@@ -84,6 +82,30 @@ class TestPluginSandboxComputeSha256:
         f2 = tmp_path / "b.py"
         f2.write_text("x = 2\n")
         assert PluginSandbox._compute_sha256(f1) != PluginSandbox._compute_sha256(f2)
+
+
+class TestPluginSandboxSubprocessError:
+    def test_non_zero_exit_code(self, tmp_path):
+        plugin_file = tmp_path / "exit_bad.py"
+        plugin_file.write_text("""
+def run():
+    import sys
+    sys.exit(1)
+""")
+        sandbox = PluginSandbox(timeout=5)
+        result = sandbox.execute(plugin_file)
+        assert result["success"] is False
+
+    def test_plugin_with_empty_args(self, tmp_path):
+        plugin_file = tmp_path / "noargs.py"
+        plugin_file.write_text("""
+def run():
+    return {"ok": True}
+""")
+        sandbox = PluginSandbox()
+        result = sandbox.execute(plugin_file)
+        assert result["success"] is True
+        assert result["result"] == {"ok": True}
 
 
 class TestPluginSandboxErrorHandling:

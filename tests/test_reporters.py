@@ -362,8 +362,6 @@ class TestVerifyRequest:
     SECRET = "test-secret-key"
 
     def test_valid_signature(self):
-        import time
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         timestamp = str(int(time.time()))
         nonce = "abc123"
         body = b'{"text": "hello"}'
@@ -372,21 +370,15 @@ class TestVerifyRequest:
         assert WebhookReporter.verify_request(secret=self.SECRET, body=body, signature_header=f"sha256={sig}", timestamp_header=timestamp, nonce_header=nonce) is True
 
     def test_expired_timestamp(self):
-        import time
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         old_ts = str(int(time.time()) - 600)
         assert WebhookReporter.verify_request(secret=self.SECRET, body=b"{}", signature_header="sha256=any", timestamp_header=old_ts, nonce_header="n1", max_age_seconds=300) is False
 
     def test_replayed_nonce(self):
-        import time
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         ts = str(int(time.time()))
         seen = {"replay-me", "other-nonce"}
         assert WebhookReporter.verify_request(secret=self.SECRET, body=b"{}", signature_header="sha256=any", timestamp_header=ts, nonce_header="replay-me", seen_nonces=seen) is False
 
     def test_tampered_body(self):
-        import time
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         timestamp = str(int(time.time()))
         nonce = "xyz789"
         body = b'{"text": "hello"}'
@@ -395,10 +387,25 @@ class TestVerifyRequest:
         assert WebhookReporter.verify_request(secret=self.SECRET, body=b'{"text": "hacked"}', signature_header=f"sha256={sig}", timestamp_header=timestamp, nonce_header=nonce) is False
 
     def test_missing_signature_prefix(self):
-        import time
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         assert WebhookReporter.verify_request(secret=self.SECRET, body=b"{}", signature_header="invalid-format", timestamp_header=str(int(time.time())), nonce_header="n1") is False
 
     def test_invalid_timestamp_format(self):
-        from selfheal.core.reporters.webhook_reporter import WebhookReporter
         assert WebhookReporter.verify_request(secret=self.SECRET, body=b"{}", signature_header="sha256=abc", timestamp_header="not-a-number", nonce_header="n1") is False
+
+    def test_no_secret_signing_returns_empty(self):
+        """_compute_signature returns empty string when no secret is configured."""
+        cfg = ReporterConfig(type="webhook", webhook_url="https://example.com")
+        reporter = WebhookReporter(cfg)
+        reporter.webhook_secret = None
+        result = reporter._compute_signature("123", "abc", b"{}")
+        assert result == ""
+
+    def test_empty_secret_verify_always_false(self):
+        """verify_request with empty secret should return False."""
+        assert WebhookReporter.verify_request(
+            secret="",
+            body=b"{}",
+            signature_header="sha256=abc",
+            timestamp_header=str(int(time.time())),
+            nonce_header="n1",
+        ) is False

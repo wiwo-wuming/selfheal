@@ -150,3 +150,13 @@ class TestSystemPatch:
                 mock_run.return_value.returncode = 1
                 result = _system_patch(target, "fake diff")
                 assert result is False
+
+    def test_system_patch_timeout_returns_false(self, tmp_path):
+        from selfheal.core.diff_parser import _system_patch
+        target = tmp_path / "test.py"
+        target.write_text("original")
+        with patch("selfheal.core.diff_parser.sys.platform", "linux"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = subprocess.TimeoutExpired(cmd=["patch"], timeout=30)
+                result = _system_patch(target, "fake diff")
+                assert result is False
