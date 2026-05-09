@@ -1,5 +1,8 @@
 """Tests for diff_parser — shared unified-diff utilities."""
 
+import subprocess
+from unittest.mock import patch
+
 import pytest
 
 from selfheal.core.diff_parser import (
@@ -114,3 +117,36 @@ class TestApplyPatchToFile:
         """apply_patch_to_file returns False when the target does not exist."""
         target = tmp_path / "missing.py"
         assert apply_patch_to_file(target, "content") is False
+
+
+class TestSystemPatch:
+    def test_system_patch_skipped_on_windows(self, tmp_path):
+        from selfheal.core.diff_parser import _system_patch
+        target = tmp_path / "test.py"
+        target.write_text("content")
+        with patch("selfheal.core.diff_parser.sys.platform", "win32"):
+            with patch("subprocess.run") as mock_run:
+                result = _system_patch(target, "fake diff")
+                assert result is False
+                mock_run.assert_not_called()
+
+    def test_system_patch_unix_success(self, tmp_path):
+        from selfheal.core.diff_parser import _system_patch
+        target = tmp_path / "test.py"
+        target.write_text("original")
+        with patch("selfheal.core.diff_parser.sys.platform", "linux"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                result = _system_patch(target, "fake diff")
+                assert result is True
+                mock_run.assert_called_once()
+
+    def test_system_patch_unix_failure(self, tmp_path):
+        from selfheal.core.diff_parser import _system_patch
+        target = tmp_path / "test.py"
+        target.write_text("original")
+        with patch("selfheal.core.diff_parser.sys.platform", "linux"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                result = _system_patch(target, "fake diff")
+                assert result is False

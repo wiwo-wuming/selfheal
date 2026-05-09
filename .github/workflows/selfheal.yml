@@ -40,11 +40,21 @@ jobs:
         run: |
           pip install -e ".[dev]"
 
+      - name: Lint with ruff
+        run: |
+          pip install ruff
+          ruff check src/
+
+      - name: Type check with mypy
+        run: |
+          pip install mypy types-PyYAML types-docker types-gunicorn
+          mypy src/
+
       - name: Run tests
         id: pytest
         continue-on-error: true
         run: |
-          python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json -k "not vcr" 2>&1 && echo "failed=false" >> "$GITHUB_OUTPUT" || echo "failed=true" >> "$GITHUB_OUTPUT"
+          python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json --cov=src/selfheal --cov-report=term-missing --cov-report=xml --cov-branch -k "not vcr" 2>&1 && echo "failed=false" >> "$GITHUB_OUTPUT" || echo "failed=true" >> "$GITHUB_OUTPUT"
 
       - name: Run VCR replay tests (no API key needed)
         run: |
