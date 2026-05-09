@@ -38,7 +38,7 @@ jobs:
 
       - name: Install project
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,llm,dashboard]"
 
       - name: Lint with ruff
         run: |
@@ -48,7 +48,7 @@ jobs:
       - name: Type check with mypy
         run: |
           pip install mypy types-PyYAML types-docker types-gunicorn
-          mypy src/
+          mypy src/ --python-version 3.11
 
       - name: Run tests
         id: pytest

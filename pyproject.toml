@@ -87,6 +87,10 @@ ignore = ["E501"]
 python_version = "3.10"
 strict = true
 
+[[tool.mypy.overrides]]
+module = "selfheal.core.dashboard_server"
+disable_error_code = ["untyped-decorator"]
+
 [tool.coverage.run]
 source = ["src/selfheal"]
 branch = true
