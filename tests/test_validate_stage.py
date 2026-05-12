@@ -386,3 +386,51 @@ class TestValidateStage:
 
         assert result["final_validation"].result == "passed"
         assert engine.validator.validate.call_count == 1
+
+    # --- experience / fuzzy experience patches with require_validation ---
+
+    def test_experience_patch_with_require_validation(self):
+        """Patch with metadata.require_validation=True — validator runs and records status."""
+        stage = ValidateStage()
+        engine = make_engine()
+        engine.validator.name = "local"
+
+        patch = make_patch(patch_id="exp-patch-1")
+        patch.metadata = {"require_validation": True}
+        engine.validator.validate.return_value = make_passed(patch)
+
+        context = {
+            "event": make_failure(),
+            "classification": make_classification(),
+            "patches": [patch],
+        }
+
+        result = stage.process(context, engine)
+
+        final = result["final_validation"]
+        assert final.result == "passed"
+        assert final.should_fallback_to_strategy is False
+        engine.validator.validate.assert_called_once_with(patch)
+        engine.metrics.record_validation.assert_called_once()
+
+    def test_experience_patch_validation_failure_signals_fallback(self):
+        """Validation fails on require_validation patch → should_fallback_to_strategy set."""
+        stage = ValidateStage()
+        engine = make_engine()
+        engine.validator.name = "local"
+
+        patch = make_patch(patch_id="fuzzy-patch")
+        patch.metadata = {"require_validation": True}
+        engine.validator.validate.return_value = make_failed(patch)
+
+        context = {
+            "event": make_failure(),
+            "classification": make_classification(),
+            "patches": [patch],
+        }
+
+        result = stage.process(context, engine)
+
+        final = result["final_validation"]
+        assert final.result == "failed"
+        assert final.should_fallback_to_strategy is True

@@ -317,3 +317,90 @@ class TestTemplatePatcherGenerate:
         ]
         for key in required_keys:
             assert key in ctx, f"Missing key: {key}"
+
+
+# ------------------------------------------------------------------
+# Experience-backed patch generation tests
+# ------------------------------------------------------------------
+
+
+class TestExperiencePatchConfidence:
+    """Test _try_experience_patch() confidence-based filtering and metadata."""
+
+    @pytest.fixture
+    def patcher(self):
+        return TemplatePatcher(PatcherConfig(templates_dir="patches/"))
+
+    @pytest.fixture
+    def classification(self):
+        failure = TestFailureEvent(
+            test_path="tests/test_foo.py",
+            error_type="AssertionError",
+            error_message="assert 3 == 5",
+            traceback=REAL_TRACEBACK,
+        )
+        return ClassificationEvent(
+            original_event=failure,
+            category="assertion",
+            severity=ErrorSeverity.MEDIUM,
+            confidence=0.9,
+            reasoning="Matched pattern: AssertionError",
+        )
+
+    def test_experience_patch_skip_low_confidence(self, patcher, classification):
+        """When experience returns only low-confidence matches, return None."""
+        with patch(
+            "selfheal.core.experience.get_experience"
+        ) as mock_get_exp:
+            mock_exp = MagicMock()
+            mock_exp.find_similar_with_confidence.return_value = [
+                {
+                    "id": 1,
+                    "signature": "abc123",
+                    "category": "assertion",
+                    "error_type": "AssertionError",
+                    "patch_content": "--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+                    "generator": "template",
+                    "success_count": 3,
+                    "match_tier": "category",
+                    "confidence": 0.35,
+                }
+            ]
+            mock_get_exp.return_value = mock_exp
+
+            result = patcher._try_experience_patch(
+                classification, min_confidence=0.40
+            )
+            assert result is None
+
+    def test_experience_fuzzy_match_sets_metadata(self, patcher, classification):
+        """A category-level match (confidence < auto-apply) marks require_validation."""
+        with patch(
+            "selfheal.core.experience.get_experience"
+        ) as mock_get_exp:
+            mock_exp = MagicMock()
+            mock_exp.find_similar_with_confidence.return_value = [
+                {
+                    "id": 2,
+                    "signature": "def456",
+                    "category": "assertion",
+                    "error_type": "AssertionError",
+                    "patch_content": "--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+                    "generator": "template",
+                    "success_count": 2,
+                    "match_tier": "category",
+                    "confidence": 0.45,
+                }
+            ]
+            mock_get_exp.return_value = mock_exp
+
+            result = patcher._try_experience_patch(
+                classification, min_confidence=0.40
+            )
+
+            assert result is not None
+            assert result.metadata == {
+                "experience_confidence": 0.45,
+                "require_validation": True,
+            }
+            assert result.generator == "experience(category:0.45)"

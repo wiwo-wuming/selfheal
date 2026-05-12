@@ -89,6 +89,7 @@ class PatchEvent:
     status: str = "generated"  # generated, pending_review, applied, rejected, rolled_back
     applied_at: datetime | None = None
     suggested_command: str = ""  # CLI command hint for manual review mode
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,6 +112,7 @@ class ValidationEvent:
     test_output: str = ""
     duration: float = 0.0
     error_message: str = ""
+    should_fallback_to_strategy: bool = False
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> dict[str, Any]:
@@ -120,5 +122,6 @@ class ValidationEvent:
             "test_output": self.test_output,
             "duration": self.duration,
             "error_message": self.error_message,
+            "should_fallback_to_strategy": self.should_fallback_to_strategy,
             "timestamp": self.timestamp.isoformat(),
         }

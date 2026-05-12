@@ -39,11 +39,28 @@ class ValidateStage(PipelineStage):
         best_validation: ValidationEvent | None = None
 
         for patch in patches:
+            # Check if this is a fuzzy experience patch requiring validation
+            require_validation = getattr(patch, "metadata", {}).get("require_validation", False)
+
+            if require_validation:
+                logger.info("Fuzzy experience patch requires mandatory validation")
+                # If validator is not local, log warning but continue
+                validator_name = getattr(engine.validator, "name", "")  # type: ignore[attr-defined]
+                if validator_name != "local":
+                    logger.warning(
+                        "Validator %s is not local; fuzzy experience patch validation may be unreliable",
+                        validator_name,
+                    )
+
             validation = engine.validator.validate(patch)  # type: ignore[attr-defined]
             engine.metrics.record_validation(validation.result, validation.duration)
             logger.info(
                 f"Validation: {validation.result} in {validation.duration:.2f}s"
             )
+
+            # If validation fails for a require_validation patch, mark for fallback
+            if require_validation and validation.result != "passed":
+                validation.should_fallback_to_strategy = True
 
             if validation.result == "passed":
                 best_validation = validation

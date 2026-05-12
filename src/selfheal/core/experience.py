@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,19 @@ logger = logging.getLogger(__name__)
 
 # Same key derivation as cache.py for consistency
 _EXPERIENCE_DB_NAME = ".selfheal/experience.db"
+
+
+@dataclass
+class ExperienceMatch:
+    """A single match from the experience store with confidence scoring."""
+    patch_content: str
+    generator: str
+    signature: str
+    category: str
+    error_type: str
+    success_count: int
+    confidence: float
+    match_tier: str  # "exact" | "error_type" | "category"
 
 
 class ExperienceStore:
@@ -222,6 +237,113 @@ class ExperienceStore:
             results.extend(self._rows_to_dicts(rows))
 
         return results[:limit]
+
+    def find_similar_with_confidence(
+        self,
+        event: TestFailureEvent,
+        category: str | None = None,
+        limit: int = 5,
+        min_confidence: float = 0.0,
+    ) -> list[ExperienceMatch]:
+        """Find past successful patches with per-match confidence scores.
+
+        Three-tier search with computed confidence:
+
+        1. Exact signature match → confidence = 0.95,                  match_tier = "exact"
+        2. Same error_type       → confidence = 0.70 * (1 - e^(-sc/5)), match_tier = "error_type"
+        3. Same category         → confidence = 0.45 * (1 - e^(-sc/5)), match_tier = "category"
+
+        where *sc* is ``success_count``.
+
+        Deduplicates across tiers (first/highest-confidence tier wins).
+        Results are filtered by *min_confidence* and sorted by confidence
+        DESC, then success_count DESC.
+        """
+        signature = make_error_signature(event)
+        conn = self._get_conn()
+        seen_ids: set[int] = set()
+        matches: list[ExperienceMatch] = []
+
+        # Tier 1: exact signature match — confidence = 0.95
+        rows = conn.execute(
+            """SELECT * FROM experiences WHERE signature = ?
+               ORDER BY success_count DESC, last_used DESC LIMIT ?""",
+            (signature, limit),
+        ).fetchall()
+        for r in rows:
+            d = dict(r)
+            confidence = 0.95
+            if confidence >= min_confidence:
+                matches.append(ExperienceMatch(
+                    patch_content=d["patch_content"],
+                    generator=d["generator"],
+                    signature=d["signature"],
+                    category=d["category"],
+                    error_type=d["error_type"],
+                    success_count=d["success_count"],
+                    confidence=confidence,
+                    match_tier="exact",
+                ))
+                seen_ids.add(d["id"])
+
+        # Tier 2: same error_type — confidence = 0.70 * (1 - e^(-sc/5))
+        if len(matches) < limit:
+            existing_sigs = {m.signature for m in matches}
+            rows = conn.execute(
+                """SELECT * FROM experiences
+                   WHERE error_type = ? AND signature NOT IN ({})
+                   ORDER BY success_count DESC, last_used DESC LIMIT ?""".format(
+                    ",".join("?" * len(existing_sigs)) if existing_sigs else "''"
+                ),
+                [event.error_type, *existing_sigs, limit - len(matches)],
+            ).fetchall()
+            for r in rows:
+                if r["id"] not in seen_ids:
+                    d = dict(r)
+                    confidence = 0.70 * (1 - math.exp(-d["success_count"] / 5))
+                    if confidence >= min_confidence:
+                        matches.append(ExperienceMatch(
+                            patch_content=d["patch_content"],
+                            generator=d["generator"],
+                            signature=d["signature"],
+                            category=d["category"],
+                            error_type=d["error_type"],
+                            success_count=d["success_count"],
+                            confidence=round(confidence, 4),
+                            match_tier="error_type",
+                        ))
+                        seen_ids.add(d["id"])
+
+        # Tier 3: same category — confidence = 0.45 * (1 - e^(-sc/5))
+        if category and len(matches) < limit:
+            rows = conn.execute(
+                """SELECT * FROM experiences
+                   WHERE category = ? AND id NOT IN ({})
+                   ORDER BY success_count DESC, last_used DESC LIMIT ?""".format(
+                    ",".join("?" * len(seen_ids)) if seen_ids else "''"
+                ),
+                [category, *seen_ids, limit - len(matches)],
+            ).fetchall()
+            for r in rows:
+                if r["id"] not in seen_ids:
+                    d = dict(r)
+                    confidence = 0.45 * (1 - math.exp(-d["success_count"] / 5))
+                    if confidence >= min_confidence:
+                        matches.append(ExperienceMatch(
+                            patch_content=d["patch_content"],
+                            generator=d["generator"],
+                            signature=d["signature"],
+                            category=d["category"],
+                            error_type=d["error_type"],
+                            success_count=d["success_count"],
+                            confidence=round(confidence, 4),
+                            match_tier="category",
+                        ))
+                        seen_ids.add(d["id"])
+
+        # Sort: highest confidence first, then by success_count
+        matches.sort(key=lambda m: (m.confidence, m.success_count), reverse=True)
+        return matches[:limit]
 
     def _rows_to_dicts(self, rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
         return [dict(r) for r in rows]

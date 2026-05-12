@@ -296,30 +296,73 @@ class TemplatePatcher(PatcherInterface):
             target_file=fallback_target,
         )
 
-    @staticmethod
-    def _try_experience_patch(classification: ClassificationEvent) -> PatchEvent | None:
-        """Search the experience store for a previously successful patch."""
+    def _try_experience_patch(
+        self,
+        classification: ClassificationEvent,
+        min_confidence: float | None = None,
+    ) -> PatchEvent | None:
+        """Search the experience store for a previously successful patch.
+
+        Uses confidence-scored multi-tier matching.  Matches below
+        *min_confidence* are discarded; the highest-confidence match wins.
+
+        Parameters:
+            classification: The classified failure to find a patch for.
+            min_confidence: Minimum confidence threshold (0.0–1.0).
+                Defaults to ``self.config.experience_min_confidence`` (0.40).
+        """
+        if min_confidence is None:
+            min_confidence = getattr(
+                self.config, "experience_min_confidence", 0.40
+            )
+        auto_apply_threshold = getattr(
+            self.config, "experience_auto_apply_threshold", 0.80
+        )
+
         try:
             from selfheal.core.experience import get_experience
 
             experience = get_experience()
-            similar = experience.find_similar(
+            candidates = experience.find_similar_with_confidence(
                 event=classification.original_event,
                 category=classification.category,
-                limit=1,
+                limit=3,
             )
-            if similar:
-                entry = similar[0]
-                logger.info(
-                    "Experience match: reusing patch (signature=%s, success_count=%d)",
-                    entry["signature"], entry["success_count"],
+
+            # Filter out low-confidence matches
+            viable = [m for m in candidates if m.confidence >= min_confidence]
+            if not viable:
+                logger.debug(
+                    "Experience search returned %d results, all below min_confidence=%.2f",
+                    len(candidates), min_confidence,
                 )
-                return PatchEvent(
-                    classification_event=classification,
-                    patch_id=str(uuid.uuid4()),
-                    patch_content=entry["patch_content"],
-                    generator=f"experience({entry['generator']})",
-                )
+                return None
+
+            # Pick the highest-confidence match
+            match = viable[0]
+            logger.info(
+                "Experience match: tier=%s confidence=%.2f signature=%s success_count=%d",
+                match.match_tier, match.confidence,
+                match.signature, match.success_count,
+            )
+
+            patch = PatchEvent(
+                classification_event=classification,
+                patch_id=str(uuid.uuid4()),
+                patch_content=match.patch_content,
+                generator=f"experience({match.match_tier}:{match.confidence:.2f})",
+            )
+
+            # Set metadata based on confidence vs auto-apply threshold
+            if match.confidence >= auto_apply_threshold:
+                patch.metadata = {"experience_confidence": match.confidence}
+            else:
+                patch.metadata = {
+                    "experience_confidence": match.confidence,
+                    "require_validation": True,
+                }
+
+            return patch
         except Exception:
             logger.debug("Experience lookup skipped", exc_info=True)
         return None

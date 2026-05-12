@@ -220,6 +220,8 @@ class PatcherConfig(BaseModel):
     llm: LLMConfig | None = None
     refine_rounds: int = 2  # LLM multi-round self-refinement (1 = single pass)
     quality_threshold: float = 4.0  # reject LLM patches scored below this (0-10)
+    experience_min_confidence: float = 0.40
+    experience_auto_apply_threshold: float = 0.80
 
 
 class ValidatorConfig(BaseModel):
