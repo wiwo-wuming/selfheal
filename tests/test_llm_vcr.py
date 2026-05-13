@@ -71,7 +71,7 @@ class TestLLMClassifierVCR:
     @pytest.fixture
     def openai_classifier(self):
         """Create an LLMClassifier configured for DeepSeek (OpenAI-compatible)."""
-        if not _has_api_key("openai") and os.environ.get("CI") != "1":
+        if not _has_api_key("openai") and not os.environ.get("CI"):
             pytest.skip("OPENAI_API_KEY not set and not in CI mode")
         cfg = ClassifierConfig(
             type="llm",
@@ -309,7 +309,7 @@ class TestLLMPatcherVCR:
     @pytest.fixture
     def openai_patcher(self):
         """Create an LLMPatcher configured for DeepSeek (OpenAI-compatible)."""
-        if not _has_api_key("openai") and os.environ.get("CI") != "1":
+        if not _has_api_key("openai") and not os.environ.get("CI"):
             pytest.skip("OPENAI_API_KEY not set and not in CI mode")
         from selfheal.events import ClassificationEvent, ErrorSeverity
         from selfheal.core.patchers.llm_patcher import LLMPatcher
