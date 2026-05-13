@@ -349,22 +349,22 @@ class TestExperiencePatchConfidence:
 
     def test_experience_patch_skip_low_confidence(self, patcher, classification):
         """When experience returns only low-confidence matches, return None."""
+        from selfheal.core.experience import ExperienceMatch
         with patch(
             "selfheal.core.experience.get_experience"
         ) as mock_get_exp:
             mock_exp = MagicMock()
             mock_exp.find_similar_with_confidence.return_value = [
-                {
-                    "id": 1,
-                    "signature": "abc123",
-                    "category": "assertion",
-                    "error_type": "AssertionError",
-                    "patch_content": "--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
-                    "generator": "template",
-                    "success_count": 3,
-                    "match_tier": "category",
-                    "confidence": 0.35,
-                }
+                ExperienceMatch(
+                    patch_content="--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+                    generator="template",
+                    signature="abc123",
+                    category="assertion",
+                    error_type="AssertionError",
+                    success_count=3,
+                    confidence=0.35,
+                    match_tier="category",
+                )
             ]
             mock_get_exp.return_value = mock_exp
 
@@ -375,22 +375,22 @@ class TestExperiencePatchConfidence:
 
     def test_experience_fuzzy_match_sets_metadata(self, patcher, classification):
         """A category-level match (confidence < auto-apply) marks require_validation."""
+        from selfheal.core.experience import ExperienceMatch
         with patch(
             "selfheal.core.experience.get_experience"
         ) as mock_get_exp:
             mock_exp = MagicMock()
             mock_exp.find_similar_with_confidence.return_value = [
-                {
-                    "id": 2,
-                    "signature": "def456",
-                    "category": "assertion",
-                    "error_type": "AssertionError",
-                    "patch_content": "--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
-                    "generator": "template",
-                    "success_count": 2,
-                    "match_tier": "category",
-                    "confidence": 0.45,
-                }
+                ExperienceMatch(
+                    patch_content="--- a/tests/test_foo.py\n+++ b/tests/test_foo.py\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+                    generator="template",
+                    signature="def456",
+                    category="assertion",
+                    error_type="AssertionError",
+                    success_count=2,
+                    confidence=0.45,
+                    match_tier="category",
+                )
             ]
             mock_get_exp.return_value = mock_exp
 
