@@ -66,6 +66,10 @@ jobs:
 
       - name: Run VCR replay tests (no API key needed)
         shell: bash
+        env:
+          OPENAI_API_KEY: "sk-vcr-dummy-key-for-replay"
+          DEEPSEEK_API_KEY: "sk-vcr-dummy-key-for-replay"
+          ANTHROPIC_API_KEY: "sk-vcr-dummy-key-for-replay"
         run: |
           python -m pytest tests/test_llm_vcr.py -v --tb=short 2>&1 || echo "VCR replay partially failed (expecting cassettes)"
 
