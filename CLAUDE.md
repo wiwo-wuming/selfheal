@@ -5,15 +5,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Test
 
 ```bash
-pip install -e ".[dev,llm]"       # editable install with all deps
-python -m pytest tests/ -q         # full suite (~10 min, 436 tests)
+pip install -e ".[dev,llm,dashboard]"    # full install
+make all                        # ruff + mypy + coverage (recommended pre-commit)
+make lint                       # ruff check src/
+make type                       # mypy src/
+make test                       # pytest -x (no coverage, fast)
+make cov                        # pytest with coverage report
+python -m pytest tests/ -q      # full suite (~15 min, 462 tests)
 python -m pytest tests/ -x --tb=short  # stop on first failure
-python -m pytest tests/test_template_patcher.py -v  # single test file
-python -m pytest tests/test_llm_vcr.py -v -k "openai"  # filtered
-python -m ruff check src/          # lint
-python -m mypy src/                # type check (strict mode)
-python -m selfheal --help          # CLI smoke test
+python -m pytest tests/test_experience.py -v  # single test file
+python -m pytest tests/ --cov=src/selfheal --cov-report=term-missing  # run with coverage
+python -m ruff check src/       # lint
+python -m mypy src/             # type check (strict mode)
+python -m selfheal --help       # CLI smoke test
 ```
+
+Windows: use `make.bat all` or `.\Makefile.ps1 all` instead of `make`
 
 VCR tests require an API key; set `OPENAI_API_KEY` env var for recording, or `CI=1` for replay-only mode.
 
@@ -56,6 +63,38 @@ Three providers (OpenAI, DeepSeek, Anthropic) via two SDKs:
 - `anthropic.Anthropic` for Anthropic + DeepSeek Anthropic-compatible (`api.deepseek.com/anthropic`)
 
 `call_structured()` in `llm_client.py` handles tool use / function calling for both protocols, with automatic JSON-extraction fallback.
+
+### ExperienceStore — fuzzy matching (v0.3.0)
+
+`core/experience.py` stores successful patches in SQLite and provides two lookup methods:
+- `find_similar()` — original 3-tier exact-match search (unchanged for backward compat)
+- `find_similar_with_confidence()` — returns `ExperienceMatch` dataclasses with confidence scores: exact signature=0.95, same error_type=0.70*decay, same category=0.45*decay. decay = `1 - e^(-success_count/5)`
+
+`_try_experience_patch()` in `template_patcher.py` uses confidence thresholds:
+- `min_confidence` (default 0.40): matches below this are discarded
+- `auto_apply_threshold` (default 0.80): matches below this get `require_validation=True` in metadata
+
+### Plugin sandbox
+
+`plugins/sandbox.py` — `PluginSandbox` class runs untrusted plugin code in a subprocess with JSON-based data exchange, timeout protection, and optional SHA256 integrity pre-check. Safe alternative to in-process `importlib` loading for untrusted plugins.
+
+## CI / GitHub Actions
+
+Workflow at `.github/workflows/selfheal.yml`. Runs on push to main/develop and PRs:
+1. **Lint (ruff)** — `ruff check src/`
+2. **Type check (mypy)** — `mypy src/ --python-version 3.11` with type stubs
+3. **Tests with coverage** — `pytest --cov=src/selfheal --cov-branch`
+4. VCR replay tests (no API key needed)
+
+CI installs `.[dev,llm,dashboard]` — all extras needed for mypy to type-check optional dependencies.
+
+## Background Agent permissions
+
+`.claude/settings.json` must be at the **Claude Code working directory** (not the project subdirectory) with:
+```json
+{"permissions": {"allow": ["Edit", "Write", "Read", "Bash", "WebFetch", "WebSearch"]}}
+```
+Settings are only loaded at session startup. Without this, background agents (`run_in_background=true`) cannot write files because they can't show permission prompts.
 
 ## Config patterns
 

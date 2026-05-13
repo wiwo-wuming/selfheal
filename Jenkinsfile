@@ -23,17 +23,14 @@ pipeline {
                 checkout scm
 
                 script {
-                    // Detect Python
                     if (isUnix()) {
                         sh 'python3 --version || python --version'
+                        sh 'pip install -e ".[dev]"'
                     } else {
                         bat 'python --version'
+                        bat 'pip install -e ".[dev]"'
                     }
                 }
-
-                sh '''
-                    pip install -e ".[dev]"
-                '''
             }
         }
 
@@ -43,10 +40,18 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    def status = sh(
-                        script: 'python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json 2>&1',
-                        returnStatus: true
-                    )
+                    def status
+                    if (isUnix()) {
+                        status = sh(
+                            script: 'python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json 2>&1',
+                            returnStatus: true
+                        )
+                    } else {
+                        status = bat(
+                            script: 'python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json',
+                            returnStatus: true
+                        )
+                    }
                     env.TESTS_FAILED = (status != 0) ? '1' : '0'
                     if (status != 0) {
                         currentBuild.result = 'UNSTABLE'
@@ -66,11 +71,16 @@ pipeline {
             steps {
                 script {
                     // Always install LLM support for the self-heal stage
-                    sh 'pip install -e ".[llm]"'
+                    if (isUnix()) {
+                        sh 'pip install -e ".[llm]"'
+                    } else {
+                        bat 'pip install -e ".[llm]"'
+                    }
 
                     // Extract failure events from pytest JSON report for batch input
-                    sh '''
-                        python -c "
+                    if (isUnix()) {
+                        sh '''
+                            python -c "
 import json, sys
 with open('pytest-results.json') as f:
     report = json.load(f)
@@ -88,16 +98,25 @@ with open('failures.json', 'w') as f:
 if not failures:
     print('No test failures extracted, creating empty array')
 " 2>&1
-                    '''
+                        '''
+                    } else {
+                        bat '''
+                            python -c "import json, sys; report = json.load(open('pytest-results.json')); failures = [{'test_path': t.get('nodeid', ''), 'error_type': 'AssertionError' if 'assert' in (t.get('call', {}).get('longrepr', '') or '') else 'RuntimeError', 'error_message': (t.get('call', {}).get('longrepr', '') or '')[:500], 'traceback': t.get('call', {}).get('longrepr', '')} for t in report.get('tests', []) if t['outcome'] in ('failed', 'error')]; json.dump(failures, open('failures.json', 'w')); print('No failures' if not failures else f'{len(failures)} failures extracted')"
+                        '''
+                    }
 
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-                        sh '''
-                            if [ -s failures.json ]; then
-                                python -m selfheal batch --input failures.json --auto-apply --config selfheal.yaml 2>&1 || true
-                            else
-                                echo "No failures to repair"
-                            fi
-                        '''
+                        if (isUnix()) {
+                            sh '''
+                                if [ -s failures.json ]; then
+                                    python -m selfheal batch --input failures.json --auto-apply --config selfheal.yaml 2>&1 || true
+                                else
+                                    echo "No failures to repair"
+                                fi
+                            '''
+                        } else {
+                            bat 'python -m selfheal batch --input failures.json --auto-apply --config selfheal.yaml || echo Self-heal step finished'
+                        }
                     }
                 }
             }
@@ -112,10 +131,18 @@ if not failures:
             }
             steps {
                 script {
-                    def status = sh(
-                        script: 'python -m pytest tests/ -v --tb=short --junitxml=junit-postfix.xml 2>&1',
-                        returnStatus: true
-                    )
+                    def status
+                    if (isUnix()) {
+                        status = sh(
+                            script: 'python -m pytest tests/ -v --tb=short --junitxml=junit-postfix.xml 2>&1',
+                            returnStatus: true
+                        )
+                    } else {
+                        status = bat(
+                            script: 'python -m pytest tests/ -v --tb=short --junitxml=junit-postfix.xml',
+                            returnStatus: true
+                        )
+                    }
                     env.POSTFIX_FAILED = (status != 0) ? '1' : '0'
                     if (status == 0) {
                         currentBuild.result = 'SUCCESS'
@@ -132,9 +159,13 @@ if not failures:
         // -----------------------------------------------------------------
         stage('Metrics Report') {
             steps {
-                sh '''
-                    python -m selfheal metrics --json > selfheal-metrics.json
-                '''
+                script {
+                    if (isUnix()) {
+                        sh 'python -m selfheal metrics --json > selfheal-metrics.json'
+                    } else {
+                        bat 'python -m selfheal metrics --json > selfheal-metrics.json'
+                    }
+                }
                 archiveArtifacts artifacts: 'selfheal-metrics.json', allowEmptyArchive: true
 
                 script {
@@ -153,7 +184,15 @@ if not failures:
     post {
         always {
             // Cleanup
-            sh 'rm -f pytest-results.json junit.xml junit-postfix.xml 2>/dev/null || true'
+            script {
+                if (isUnix()) {
+                    sh 'rm -f pytest-results.json junit.xml junit-postfix.xml 2>/dev/null || true'
+                } else {
+                    bat 'if exist pytest-results.json del /f pytest-results.json'
+                    bat 'if exist junit.xml del /f junit.xml'
+                    bat 'if exist junit-postfix.xml del /f junit-postfix.xml'
+                }
+            }
             echo "Pipeline finished with result: ${currentBuild.result}"
         }
         success {

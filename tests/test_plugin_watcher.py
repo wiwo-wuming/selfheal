@@ -87,22 +87,28 @@ class TestPluginWatcherSchedule:
 
     def test_schedule_reload_adds_to_pending(self, watcher):
         """_schedule_reload should add a file to the pending set."""
-        watcher._schedule_reload("/tmp/test_plugin.py")
+        import tempfile as _tmp
+        p = str(Path(_tmp.gettempdir()) / "test_plugin.py")
+        watcher._schedule_reload(p)
         assert len(watcher._pending) == 1
-        assert "/tmp/test_plugin.py" in watcher._pending
+        assert p in watcher._pending
 
     def test_schedule_reload_deduplicates(self, watcher):
         """Multiple schedules for the same file should not duplicate."""
-        watcher._schedule_reload("/tmp/test_plugin.py")
-        watcher._schedule_reload("/tmp/test_plugin.py")
-        watcher._schedule_reload("/tmp/test_plugin.py")
+        import tempfile as _tmp
+        p = str(Path(_tmp.gettempdir()) / "test_plugin.py")
+        watcher._schedule_reload(p)
+        watcher._schedule_reload(p)
+        watcher._schedule_reload(p)
         assert len(watcher._pending) == 1
 
     def test_schedule_reload_multiple_files(self, watcher):
         """Different files should each have their own pending entry."""
-        watcher._schedule_reload("/tmp/a.py")
-        watcher._schedule_reload("/tmp/b.py")
-        watcher._schedule_reload("/tmp/c.py")
+        import tempfile as _tmp
+        t = _tmp.gettempdir()
+        watcher._schedule_reload(str(Path(t) / "a.py"))
+        watcher._schedule_reload(str(Path(t) / "b.py"))
+        watcher._schedule_reload(str(Path(t) / "c.py"))
         assert len(watcher._pending) == 3
 
     def test_process_pending_after_debounce(self, watcher, temp_plugin_dir):
@@ -128,7 +134,9 @@ class TestPluginWatcherSchedule:
     def test_process_pending_nonexistent_file(self, watcher):
         """Files that no longer exist should be silently skipped."""
         callback = MagicMock()
-        watcher._schedule_reload("/tmp/removed_plugin.py")
+        import tempfile as _tmp
+        p = str(Path(_tmp.gettempdir()) / "removed_plugin.py")
+        watcher._schedule_reload(p)
         debounce = max(0.5, watcher.config.poll_interval)
         time.sleep(debounce + 0.15)
         watcher._process_pending_reloads(callback)

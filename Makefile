@@ -1,3 +1,4 @@
+# Unix/Linux Makefile — Windows users: use make.bat or .\Makefile.ps1
 .PHONY: all lint type test cov
 
 all: lint type cov

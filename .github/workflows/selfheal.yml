@@ -23,9 +23,13 @@ jobs:
   # Job 1: Run the full test suite to detect failures
   # -------------------------------------------------------------------
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    name: Run Test Suite
+    name: Run Test Suite (${{ matrix.os }})
 
     steps:
       - uses: actions/checkout@v4
@@ -37,15 +41,18 @@ jobs:
           cache: 'pip'
 
       - name: Install project
+        shell: bash
         run: |
           pip install -e ".[dev,llm,dashboard]"
 
       - name: Lint with ruff
+        shell: bash
         run: |
           pip install ruff
           ruff check src/
 
       - name: Type check with mypy
+        shell: bash
         run: |
           pip install mypy types-PyYAML types-docker types-gunicorn
           mypy src/ --python-version 3.11
@@ -53,10 +60,12 @@ jobs:
       - name: Run tests
         id: pytest
         continue-on-error: true
+        shell: bash
         run: |
           python -m pytest tests/ -v --tb=short --junitxml=junit.xml --json-report --json-report-file=pytest-results.json --cov=src/selfheal --cov-report=term-missing --cov-report=xml --cov-branch -k "not vcr" 2>&1 && echo "failed=false" >> "$GITHUB_OUTPUT" || echo "failed=true" >> "$GITHUB_OUTPUT"
 
       - name: Run VCR replay tests (no API key needed)
+        shell: bash
         run: |
           python -m pytest tests/test_llm_vcr.py -v --tb=short 2>&1 || echo "VCR replay partially failed (expecting cassettes)"
 
@@ -64,24 +73,25 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: |
             junit.xml
             pytest-results.json
           retention-days: 7
 
-    outputs:
-      tests_failed: ${{ steps.pytest.outputs.failed }}
-
   # -------------------------------------------------------------------
-  # Job 2: Self-heal on test failure (runs only if tests failed)
+  # Job 2: Self-heal on test failure (runs when tests complete)
   # -------------------------------------------------------------------
   selfheal:
     needs: test
-    if: needs.test.outputs.tests_failed == 'true'
-    runs-on: ubuntu-latest
+    if: always() && !cancelled()
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    name: Self-Heal Repair
+    name: Self-Heal Repair (${{ matrix.os }})
 
     steps:
       - uses: actions/checkout@v4
@@ -93,13 +103,14 @@ jobs:
           cache: 'pip'
 
       - name: Install project with LLM support
+        shell: bash
         run: |
           pip install -e ".[dev,llm]"
 
       - name: Download test results
         uses: actions/download-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
 
       - name: Extract failures from pytest JSON report
         shell: python
@@ -123,6 +134,7 @@ jobs:
               print("No test failures extracted")
 
       - name: Run SelfHeal batch repair
+        shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -134,11 +146,13 @@ jobs:
 
       - name: Retry tests after repair
         if: always()
+        shell: bash
         run: |
           python -m pytest tests/ -v --tb=short --junitxml=junit-postfix.xml 2>&1 || echo "POSTFIX_FAILED=1" >> "$GITHUB_ENV"
 
       - name: Generate metrics report
         if: always()
+        shell: bash
         run: |
           python -m selfheal metrics --json > selfheal-metrics.json
 
@@ -146,7 +160,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: selfheal-results
+          name: selfheal-results-${{ matrix.os }}
           path: |
             selfheal-metrics.json
             junit-postfix.xml
@@ -168,7 +182,7 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `🤖 SelfHeal: Test failures persist after auto-repair`,
+              title: `🤖 SelfHeal: Test failures persist after auto-repair (${{ matrix.os }})`,
               body: body,
               labels: ['self-heal', 'automated', 'bug']
             });
@@ -179,9 +193,13 @@ jobs:
   health-check:
     needs: [test, selfheal]
     if: always()
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 5
-    name: SelfHeal Health Check
+    name: SelfHeal Health Check (${{ matrix.os }})
     steps:
       - uses: actions/checkout@v4
 
@@ -191,15 +209,18 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install selfheal
+        shell: bash
         run: pip install -e .
 
       - name: Verify CLI works
+        shell: bash
         run: |
           python -m selfheal --version
           python -m selfheal --help
 
       - name: Verify init generates config
+        shell: bash
         run: |
-          cd /tmp
+          cd "$RUNNER_TEMP"
           python -m selfheal init
           test -f selfheal.yaml && echo "Config generated OK" || (echo "Config missing!" && exit 1)
